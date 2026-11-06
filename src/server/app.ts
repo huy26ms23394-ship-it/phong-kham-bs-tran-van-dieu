@@ -11,7 +11,6 @@ export const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 // ================= BẢO MẬT & SECURITY HARDENING (LUẬT 116/2025/QH15 & NĐ 333/2026/NĐ-CP) =================
-// 1. HTTP Security Headers
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -21,7 +20,7 @@ app.use((_req, res, next) => {
   next();
 });
 
-// 2. In-Memory Sliding-Window IP Rate Limiter
+// In-Memory Sliding-Window IP Rate Limiter
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 120;
@@ -37,7 +36,10 @@ function checkRateLimit(ip: string): boolean {
   return record.count <= MAX_REQUESTS_PER_WINDOW;
 }
 
-app.use('/api', (req, res, next) => {
+const apiRouter = express.Router();
+
+// Rate limiting middleware on apiRouter
+apiRouter.use((req, res, next) => {
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
   if (!checkRateLimit(clientIp)) {
     dbService.recordAuditLog({
@@ -55,10 +57,10 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// ================= API ENDPOINTS =================
+// ================= ROUTE DEFINITIONS =================
 
 // Health & System Status
-app.get('/api/health', (_req, res) => {
+apiRouter.get('/health', (_req, res) => {
   const storage = dbService.getStorageStatus();
   res.json({
     status: 'ONLINE',
@@ -69,7 +71,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Audit Logs
-app.get('/api/security/audit-logs', async (_req, res) => {
+apiRouter.get('/security/audit-logs', async (_req, res) => {
   try {
     const logs = await dbService.getRecentAuditLogs(100);
     return res.json({ success: true, count: logs.length, logs });
@@ -78,7 +80,7 @@ app.get('/api/security/audit-logs', async (_req, res) => {
   }
 });
 
-app.post('/api/security/audit-event', async (req, res) => {
+apiRouter.post('/security/audit-event', async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const { action, status, details } = req.body || {};
@@ -98,7 +100,7 @@ app.post('/api/security/audit-event', async (req, res) => {
 });
 
 // AI Copilot
-app.post('/api/ai/clinic-copilot', async (req, res) => {
+apiRouter.post('/ai/clinic-copilot', async (req, res) => {
   try {
     const {
       action,
@@ -177,7 +179,7 @@ Nội dung: ${query || 'Phân tích dữ liệu lâm sàng toàn diện'}
 });
 
 // AI Assistant Legacy
-app.post('/api/ai/assistant', async (req, res) => {
+apiRouter.post('/ai/assistant', async (req, res) => {
   try {
     const { action, diagnosis, symptoms, patientName, patientAge, allergies, medications, question } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
@@ -211,7 +213,7 @@ app.post('/api/ai/assistant', async (req, res) => {
 });
 
 // Tra cứu thuốc theo Dược Thư
-app.post('/api/ai/lookup-drug', async (req, res) => {
+apiRouter.post('/ai/lookup-drug', async (req, res) => {
   try {
     const { drugName } = req.body;
     if (!drugName || typeof drugName !== 'string') {
@@ -257,7 +259,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ:
 });
 
 // Crawler Bot APIs
-app.get('/api/crawler/status', (_req, res) => {
+apiRouter.get('/crawler/status', (_req, res) => {
   try {
     res.json({ success: true, ...crawlerService.getStatus() });
   } catch (err: unknown) {
@@ -265,7 +267,7 @@ app.get('/api/crawler/status', (_req, res) => {
   }
 });
 
-app.get('/api/crawler/pending', (_req, res) => {
+apiRouter.get('/crawler/pending', (_req, res) => {
   try {
     res.json({ success: true, items: crawlerService.getPendingItems() });
   } catch (err: unknown) {
@@ -273,7 +275,7 @@ app.get('/api/crawler/pending', (_req, res) => {
   }
 });
 
-app.post('/api/crawler/settings', (req, res) => {
+apiRouter.post('/crawler/settings', (req, res) => {
   try {
     res.json({ success: true, settings: crawlerService.updateSettings(req.body) });
   } catch (err: unknown) {
@@ -281,7 +283,7 @@ app.post('/api/crawler/settings', (req, res) => {
   }
 });
 
-app.post('/api/crawler/run', async (req, res) => {
+apiRouter.post('/crawler/run', async (req, res) => {
   try {
     const { clinicCatalogNames } = req.body || {};
     const result = await crawlerService.runCrawl('manual', clinicCatalogNames || []);
@@ -291,7 +293,7 @@ app.post('/api/crawler/run', async (req, res) => {
   }
 });
 
-app.post('/api/crawler/approve', (req, res) => {
+apiRouter.post('/crawler/approve', (req, res) => {
   try {
     const { id, customEdits } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Thiếu ID thuốc' });
@@ -301,7 +303,7 @@ app.post('/api/crawler/approve', (req, res) => {
   }
 });
 
-app.post('/api/crawler/approve-all', (_req, res) => {
+apiRouter.post('/crawler/approve-all', (_req, res) => {
   try {
     const approvedList = crawlerService.approveAllPending();
     res.json({ success: true, count: approvedList.length, items: approvedList });
@@ -310,7 +312,7 @@ app.post('/api/crawler/approve-all', (_req, res) => {
   }
 });
 
-app.post('/api/crawler/reject', (req, res) => {
+apiRouter.post('/crawler/reject', (req, res) => {
   try {
     const { id, reason } = req.body;
     if (!id) return res.status(400).json({ success: false, error: 'Thiếu ID thuốc' });
@@ -320,15 +322,16 @@ app.post('/api/crawler/reject', (req, res) => {
   }
 });
 
-app.post('/api/crawler/reject-all', (_req, res) => {
+apiRouter.post('/crawler/reject-all', (_req, res) => {
   try {
-    res.json({ success: true, count: crawlerService.rejectAllPending() });
+    const count = crawlerService.rejectAllPending();
+    res.json({ success: true, count });
   } catch (err: unknown) {
     res.status(500).json({ success: false, error: (err as Error).message });
   }
 });
 
-app.put('/api/crawler/item/:id', (req, res) => {
+apiRouter.put('/crawler/item/:id', (req, res) => {
   try {
     res.json({ success: true, item: crawlerService.updatePendingItem(req.params.id, req.body) });
   } catch (err: unknown) {
@@ -337,13 +340,11 @@ app.put('/api/crawler/item/:id', (req, res) => {
 });
 
 // Vercel Cron Job: Daily Maintenance (chạy dưới 30s)
-app.get('/api/cron/daily-maintenance', async (_req, res) => {
+apiRouter.get('/cron/daily-maintenance', async (_req, res) => {
   try {
-    // 1. Giữ ấm Cloud Database
     const { data } = await dbService.getClinicData();
     const catalogCount = (data?.pharmacyCatalog as unknown[])?.length || 0;
 
-    // 2. Chạy crawl batch nhỏ để không vượt quá 30s
     let crawlResult = null;
     try {
       crawlResult = await crawlerService.runCrawl('scheduled', []);
@@ -365,14 +366,13 @@ app.get('/api/cron/daily-maintenance', async (_req, res) => {
 });
 
 // Clinic Sync (Cloud & Local Hybrid)
-app.get('/api/clinic/sync', async (req, res) => {
+apiRouter.get('/clinic/sync', async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const clientEtag = req.headers['if-none-match'];
 
     const { data, etag } = await dbService.getClinicData();
 
-    // Hỗ trợ HTTP 304 Not Modified để polling siêu nhẹ không tốn băng thông
     if (clientEtag && clientEtag === etag) {
       return res.status(304).end();
     }
@@ -396,7 +396,7 @@ app.get('/api/clinic/sync', async (req, res) => {
   }
 });
 
-app.post('/api/clinic/sync', async (req, res) => {
+apiRouter.post('/clinic/sync', async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const result = await dbService.saveClinicData(req.body || {});
@@ -418,3 +418,7 @@ app.post('/api/clinic/sync', async (req, res) => {
     return res.status(500).json({ success: false, error: (err as Error).message });
   }
 });
+
+// Mount router under BOTH /api and / to handle all routing environments seamlessly
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
