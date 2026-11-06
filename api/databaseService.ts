@@ -131,9 +131,15 @@ export class DatabaseService {
           version: 1,
         };
 
-        if (fs.existsSync(this.clinicDbFile)) {
+        const targetSeedFile = fs.existsSync(this.clinicDbFile)
+          ? this.clinicDbFile
+          : fs.existsSync(this.rootClinicDbFile)
+          ? this.rootClinicDbFile
+          : null;
+
+        if (targetSeedFile) {
           try {
-            seedData = JSON.parse(fs.readFileSync(this.clinicDbFile, 'utf-8'));
+            seedData = JSON.parse(fs.readFileSync(targetSeedFile, 'utf-8'));
           } catch {}
         }
 
@@ -398,6 +404,49 @@ export class DatabaseService {
     }
 
     return [];
+  }
+
+  /**
+   * Ping Cloud Database để chống ngủ đông (Anti-Pause) cho Supabase / Cloud Postgres Free Tier
+   */
+  public async pingDatabase(): Promise<{ success: boolean; message: string; timestamp: string }> {
+    const now = new Date().toISOString();
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        const res = await this.pgPool.query(`SELECT NOW() as current_time, count(*) as count FROM clinic_store`);
+        return {
+          success: true,
+          message: `PostgreSQL Ping OK (${res.rows[0]?.current_time || now})`,
+          timestamp: now,
+        };
+      } catch (err: any) {
+        return { success: false, message: `PostgreSQL Ping error: ${err.message}`, timestamp: now };
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/clinic_store?select=id,updated_at&limit=1`, {
+          headers: {
+            apikey: this.supabaseKey,
+            Authorization: `Bearer ${this.supabaseKey}`,
+          },
+        });
+        if (res.ok) {
+          return { success: true, message: 'Supabase REST Ping OK', timestamp: now };
+        }
+        return { success: false, message: `Supabase REST HTTP ${res.status}`, timestamp: now };
+      } catch (err: any) {
+        return { success: false, message: `Supabase Ping error: ${err.message}`, timestamp: now };
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Local storage active (no cloud DB configured)',
+      timestamp: now,
+    };
   }
 
   public getStorageStatus(): { mode: 'CLOUD' | 'LOCAL'; provider: string } {

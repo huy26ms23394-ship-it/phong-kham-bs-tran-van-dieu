@@ -342,6 +342,7 @@ apiRouter.put('/crawler/item/:id', (req, res) => {
 // Vercel Cron Job: Daily Maintenance (chạy dưới 30s)
 apiRouter.get('/cron/daily-maintenance', async (_req, res) => {
   try {
+    const pingResult = await dbService.pingDatabase();
     const { data } = await dbService.getClinicData();
     const catalogCount = (data?.pharmacyCatalog as unknown[])?.length || 0;
 
@@ -355,7 +356,7 @@ apiRouter.get('/cron/daily-maintenance', async (_req, res) => {
     return res.json({
       success: true,
       job: 'daily-maintenance',
-      cloudDbActive: true,
+      antiPause: pingResult,
       currentCatalogCount: catalogCount,
       crawlResult,
       executedAt: new Date().toISOString(),
