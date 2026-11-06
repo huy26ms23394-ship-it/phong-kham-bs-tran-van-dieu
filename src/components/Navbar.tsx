@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ClinicSettings } from '../types/medical';
 import { GoogleAuthBar, GoogleUser } from './GoogleAuthBar';
+import { ClinicUser } from '../types/auth';
 import {
   Stethoscope,
   Users,
@@ -53,6 +54,9 @@ interface NavbarProps {
   googleUser: GoogleUser;
   onGoogleLogin: (user: GoogleUser) => void;
   onGoogleLogout: () => void;
+  currentUser?: ClinicUser | null;
+  pendingUsersCount?: number;
+  onOpenUserApprovalModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -81,6 +85,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   googleUser,
   onGoogleLogin,
   onGoogleLogout,
+  currentUser,
+  pendingUsersCount = 0,
+  onOpenUserApprovalModal,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -224,6 +231,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <kbd className="px-1 py-0.2 text-[9px] font-mono bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 rounded border border-slate-300 dark:border-slate-700 font-bold">
                   F10
                 </kbd>
+              </button>
+            )}
+
+            {/* User Approval / Whitelist Modal Button (Visible only to SUPER_ADMIN) */}
+            {currentUser?.role === 'SUPER_ADMIN' && onOpenUserApprovalModal && (
+              <button
+                type="button"
+                onClick={onOpenUserApprovalModal}
+                className="h-8.5 px-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/70 text-purple-800 dark:text-purple-300 rounded-md font-bold text-xs flex items-center gap-1.5 transition-colors border border-purple-200 dark:border-purple-800/80 cursor-pointer relative"
+                title="Quản lý thành viên & Phê duyệt tài khoản gia đình (SUPER_ADMIN)"
+              >
+                <Users className="w-3.5 h-3.5 text-purple-700 dark:text-purple-400" />
+                <span className="hidden lg:inline">Thành viên</span>
+                {pendingUsersCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-mono animate-pulse">
+                    {pendingUsersCount}
+                  </span>
+                )}
               </button>
             )}
 

@@ -1,4 +1,5 @@
 import { Patient, PrescribedMedication, MedicationCatalogItem } from '../types/medical';
+import { getAuthHeaders } from './authClient';
 import { runComprehensiveLocalSafetyCheck, ClinicalRuleAlert } from './clinicalRules';
 
 export { runComprehensiveLocalSafetyCheck };
@@ -52,7 +53,7 @@ export async function queryClinicCopilotWithFullContext(
 
     const response = await fetch('/api/ai/clinic-copilot', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         action: payload.action,
         query: payload.query,
@@ -306,7 +307,7 @@ export async function lookupDrugFromPharmacopoeia(drugName: string): Promise<{
 
     const res = await fetch('/api/ai/lookup-drug', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ drugName }),
       signal: controller.signal,
     });

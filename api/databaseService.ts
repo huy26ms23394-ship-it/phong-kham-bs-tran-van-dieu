@@ -22,7 +22,23 @@ export interface AuditLogEntry {
   ip: string;
   status: 'SUCCESS' | 'FAILURE' | 'BLOCKED';
   userAgent?: string;
+  userEmail?: string;
   details?: Record<string, unknown>;
+}
+
+export type UserRole = 'SUPER_ADMIN' | 'DOCTOR' | 'RECEPTIONIST' | 'PHARMACIST';
+export type UserStatus = 'APPROVED' | 'PENDING' | 'REVOKED';
+
+export interface AuthorizedUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  role: UserRole;
+  status: UserStatus;
+  requested_at: string;
+  approved_by?: string;
+  updated_at?: string;
 }
 
 export class DatabaseService {
@@ -38,12 +54,25 @@ export class DatabaseService {
 
   private readonly supabaseUrl?: string;
   private readonly supabaseKey?: string;
+  private localUsers: Map<string, AuthorizedUser> = new Map();
 
   private constructor() {
     this.dataDir = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
     this.clinicDbFile = path.join(this.dataDir, 'clinic_db.json');
     this.rootClinicDbFile = path.resolve(process.cwd(), 'server_data', 'clinic_db.json');
     this.auditLogsFile = path.join(this.dataDir, 'audit_logs.jsonl');
+
+    const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+    this.localUsers.set(adminEmail, {
+      id: 'usr_admin_master',
+      email: adminEmail,
+      full_name: 'Bác Sĩ Trần Văn Diệu (Master Admin)',
+      role: 'SUPER_ADMIN',
+      status: 'APPROVED',
+      requested_at: new Date().toISOString(),
+      approved_by: 'SYSTEM_INITIAL',
+      updated_at: new Date().toISOString(),
+    });
 
     const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
     if (dbUrl) {
@@ -127,6 +156,28 @@ export class DatabaseService {
           details JSONB
         );
       `);
+
+      await this.pgPool.query(`
+        CREATE TABLE IF NOT EXISTS authorized_users (
+          id TEXT PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          full_name TEXT,
+          avatar_url TEXT,
+          role TEXT DEFAULT 'DOCTOR',
+          status TEXT DEFAULT 'PENDING',
+          requested_at TIMESTAMPTZ DEFAULT NOW(),
+          approved_by TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+      await this.pgPool.query(
+        `INSERT INTO authorized_users (id, email, full_name, role, status, requested_at, approved_by, updated_at)
+         VALUES ($1, $2, $3, 'SUPER_ADMIN', 'APPROVED', NOW(), 'SYSTEM_INITIAL', NOW())
+         ON CONFLICT (email) DO UPDATE SET role = 'SUPER_ADMIN', status = 'APPROVED'`,
+        ['usr_admin_master', adminEmail, 'Bác Sĩ Trần Văn Diệu (Master Admin)']
+      );
 
       // Kiểm tra seed data
       const checkRes = await this.pgPool.query(`SELECT id FROM clinic_store WHERE id = 'default' LIMIT 1`);
@@ -459,6 +510,199 @@ export class DatabaseService {
       message: lastError ? `PostgreSQL Ping error: ${lastError}` : 'Local storage active (no cloud DB configured)',
       timestamp: now,
     };
+  }
+
+  /**
+   * Lấy thông tin tài khoản theo email
+   */
+  public async getAuthorizedUser(rawEmail: string): Promise<AuthorizedUser | null> {
+    const email = rawEmail.toLowerCase().trim();
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        const res = await this.pgPool.query(
+          `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at 
+           FROM authorized_users WHERE LOWER(email) = $1 LIMIT 1`,
+          [email]
+        );
+        if (res.rowCount && res.rows[0]) {
+          return res.rows[0] as AuthorizedUser;
+        }
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi getAuthorizedUser Postgres:', err);
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(email)}&select=*`, {
+          headers: {
+            apikey: this.supabaseKey,
+            Authorization: `Bearer ${this.supabaseKey}`,
+          },
+        });
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows && rows.length > 0) return rows[0] as AuthorizedUser;
+        }
+      } catch (err) {}
+    }
+
+    return this.localUsers.get(email) || null;
+  }
+
+  /**
+   * Thêm hoặc cập nhật tài khoản
+   */
+  public async upsertAuthorizedUser(user: {
+    email: string;
+    full_name?: string;
+    avatar_url?: string;
+    role?: UserRole;
+    status?: UserStatus;
+    approved_by?: string;
+  }): Promise<AuthorizedUser> {
+    const email = user.email.toLowerCase().trim();
+    const existing = await this.getAuthorizedUser(email);
+    const now = new Date().toISOString();
+    const id = existing?.id || `usr_${crypto.randomBytes(6).toString('hex')}`;
+    const role: UserRole = user.role || existing?.role || 'DOCTOR';
+    const status: UserStatus = user.status || existing?.status || 'PENDING';
+    const full_name = user.full_name || existing?.full_name || '';
+    const avatar_url = user.avatar_url || existing?.avatar_url || '';
+    const approved_by = user.approved_by || existing?.approved_by;
+
+    const record: AuthorizedUser = {
+      id,
+      email,
+      full_name,
+      avatar_url,
+      role,
+      status,
+      requested_at: existing?.requested_at || now,
+      approved_by,
+      updated_at: now,
+    };
+
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        await this.pgPool.query(
+          `INSERT INTO authorized_users (id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+           ON CONFLICT (email) DO UPDATE SET 
+             full_name = EXCLUDED.full_name,
+             avatar_url = EXCLUDED.avatar_url,
+             role = EXCLUDED.role,
+             status = EXCLUDED.status,
+             approved_by = EXCLUDED.approved_by,
+             updated_at = NOW()`,
+          [record.id, record.email, record.full_name, record.avatar_url, record.role, record.status, record.requested_at, record.approved_by]
+        );
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi upsertAuthorizedUser Postgres:', err);
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?on_conflict=email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: this.supabaseKey,
+            Authorization: `Bearer ${this.supabaseKey}`,
+            Prefer: 'resolution=merge-duplicates',
+          },
+          body: JSON.stringify(record),
+        });
+      } catch (err) {}
+    }
+
+    this.localUsers.set(email, record);
+    return record;
+  }
+
+  /**
+   * Liệt kê tất cả tài khoản
+   */
+  public async listAuthorizedUsers(): Promise<AuthorizedUser[]> {
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        const res = await this.pgPool.query(
+          `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at 
+           FROM authorized_users 
+           ORDER BY 
+             CASE status WHEN 'PENDING' THEN 1 WHEN 'APPROVED' THEN 2 ELSE 3 END,
+             requested_at DESC`
+        );
+        return res.rows as AuthorizedUser[];
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi listAuthorizedUsers Postgres:', err);
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?order=status.asc,requested_at.desc`, {
+          headers: {
+            apikey: this.supabaseKey,
+            Authorization: `Bearer ${this.supabaseKey}`,
+          },
+        });
+        if (res.ok) {
+          return (await res.json()) as AuthorizedUser[];
+        }
+      } catch (err) {}
+    }
+
+    return Array.from(this.localUsers.values());
+  }
+
+  /**
+   * Cập nhật trạng thái duyệt / vai trò của người dùng
+   */
+  public async updateUserStatus(email: string, status: UserStatus, role?: UserRole, approvedBy?: string): Promise<boolean> {
+    const user = await this.getAuthorizedUser(email);
+    if (!user) return false;
+    await this.upsertAuthorizedUser({
+      email,
+      status,
+      role: role || user.role,
+      approved_by: approvedBy || 'ADMIN',
+    });
+    return true;
+  }
+
+  /**
+   * Nhập trước (Pre-approve) email người thân
+   */
+  public async preApproveUser(email: string, fullName: string, role: UserRole, approvedBy: string): Promise<AuthorizedUser> {
+    return this.upsertAuthorizedUser({
+      email,
+      full_name: fullName,
+      role,
+      status: 'APPROVED',
+      approved_by: approvedBy,
+    });
+  }
+
+  /**
+   * Thu hồi hoặc xóa tài khoản
+   */
+  public async deleteAuthorizedUser(rawEmail: string): Promise<boolean> {
+    const email = rawEmail.toLowerCase().trim();
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        await this.pgPool.query(`DELETE FROM authorized_users WHERE LOWER(email) = $1`, [email]);
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi deleteAuthorizedUser Postgres:', err);
+      }
+    }
+    this.localUsers.delete(email);
+    return true;
   }
 
   public getStorageStatus(): { mode: 'CLOUD' | 'LOCAL'; provider: string } {

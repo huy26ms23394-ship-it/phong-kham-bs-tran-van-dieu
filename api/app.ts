@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { crawlerService } from './crawlerService.js';
 import { dbService } from './databaseService.js';
+import { signToken, verifyToken, verifyMasterAdmin } from './authService.js';
 
 dotenv.config();
 
@@ -57,7 +58,369 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
+// ================= ZERO-TRUST CLINICAL AUTHENTICATION MIDDLEWARE =================
+export const authMiddleware: express.RequestHandler = async (req, res, next) => {
+  const authHeader = req.headers['authorization'] || (req.headers['x-clinic-auth-token'] as string);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'UNAUTHORIZED',
+      message: 'Yêu cầu đăng nhập. Vui lòng cung cấp khóa phiên làm việc hợp lệ.',
+    });
+  }
+
+  const payload = verifyToken(token);
+  if (!payload) {
+    return res.status(401).json({
+      success: false,
+      error: 'TOKEN_INVALID',
+      message: 'Phiên làm việc đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.',
+    });
+  }
+
+  // Luôn kiểm tra lại trạng thái người dùng trong Database để bắt kịp thay đổi thu hồi quyền
+  const latestUser = await dbService.getAuthorizedUser(payload.email);
+  if (!latestUser) {
+    return res.status(403).json({
+      success: false,
+      error: 'USER_NOT_FOUND',
+      message: 'Tài khoản không tồn tại trên hệ thống phòng khám.',
+    });
+  }
+
+  if (latestUser.status === 'PENDING') {
+    return res.status(403).json({
+      success: false,
+      error: 'ACCOUNT_PENDING',
+      status: 'PENDING',
+      message: 'Tài khoản đang chờ Bác sĩ Trần Văn Diệu phê duyệt.',
+    });
+  }
+
+  if (latestUser.status === 'REVOKED') {
+    return res.status(403).json({
+      success: false,
+      error: 'ACCOUNT_REVOKED',
+      status: 'REVOKED',
+      message: 'Quyền truy cập của tài khoản này đã bị thu hồi hoặc khóa.',
+    });
+  }
+
+  (req as any).user = latestUser;
+  next();
+};
+
+export const adminOnlyMiddleware: express.RequestHandler = (req, res, next) => {
+  const user = (req as any).user;
+  if (!user || user.role !== 'SUPER_ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'PERMISSION_DENIED',
+      message: 'Chức năng này chỉ dành riêng cho Quản trị viên tối cao (SUPER_ADMIN).',
+    });
+  }
+  next();
+};
+
 // ================= ROUTE DEFINITIONS =================
+
+// ================= AUTHENTICATION & ZERO-TRUST ENDPOINTS =================
+
+// 1. Đăng nhập Master Admin (Email / Username + Mật khẩu cố định)
+apiRouter.post('/auth/login-admin', async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const { emailOrUsername, password } = req.body || {};
+
+    if (!emailOrUsername || !password) {
+      return res.status(400).json({ success: false, error: 'Thiếu tài khoản hoặc mật khẩu quản trị' });
+    }
+
+    const isValid = verifyMasterAdmin(emailOrUsername, password);
+    if (!isValid) {
+      await dbService.recordAuditLog({
+        action: 'ADMIN_LOGIN_FAILED',
+        ip: clientIp,
+        status: 'FAILURE',
+        userAgent: req.headers['user-agent'],
+        details: { inputUser: emailOrUsername },
+      });
+      return res.status(401).json({ success: false, error: 'Tài khoản hoặc mật khẩu quản trị viên không chính xác' });
+    }
+
+    const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+    const adminUser = await dbService.upsertAuthorizedUser({
+      email: adminEmail,
+      full_name: 'Bác Sĩ Trần Văn Diệu (Master Admin)',
+      role: 'SUPER_ADMIN',
+      status: 'APPROVED',
+      approved_by: 'SYSTEM_MASTER',
+    });
+
+    const token = signToken({
+      email: adminUser.email,
+      role: adminUser.role,
+      status: adminUser.status,
+      fullName: adminUser.full_name,
+      avatarUrl: adminUser.avatar_url,
+    });
+
+    await dbService.recordAuditLog({
+      action: 'ADMIN_LOGIN_SUCCESS',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { email: adminEmail, role: 'SUPER_ADMIN' },
+    });
+
+    return res.json({
+      success: true,
+      token,
+      user: adminUser,
+    });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 2. Đăng nhập Google SSO (One-Click Google Login / ID Token / Supabase Profile)
+apiRouter.post('/auth/google', async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const { credential, email: directEmail, name: directName, picture: directPicture } = req.body || {};
+
+    let userEmail = directEmail ? String(directEmail).toLowerCase().trim() : '';
+    let userName = directName ? String(directName) : '';
+    let userAvatar = directPicture ? String(directPicture) : '';
+
+    // Nếu gửi kèm Google Credential (JWT ID Token từ Google Identity Services), giải mã & xác thực
+    if (credential) {
+      try {
+        const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+        if (verifyRes.ok) {
+          const googleData = await verifyRes.json();
+          if (googleData.email) {
+            userEmail = googleData.email.toLowerCase().trim();
+            userName = googleData.name || userName;
+            userAvatar = googleData.picture || userAvatar;
+          }
+        } else {
+          // Fallback: decode JWT payload trực tiếp
+          const parts = String(credential).split('.');
+          if (parts.length === 3) {
+            const rawPayload = Buffer.from(parts[1], 'base64').toString('utf-8');
+            const parsed = JSON.parse(rawPayload);
+            if (parsed.email) {
+              userEmail = parsed.email.toLowerCase().trim();
+              userName = parsed.name || userName;
+              userAvatar = parsed.picture || userAvatar;
+            }
+          }
+        }
+      } catch (tokenErr) {
+        console.warn('[Auth] Lỗi giải mã Google Token:', tokenErr);
+      }
+    }
+
+    if (!userEmail) {
+      return res.status(400).json({ success: false, error: 'Không nhận diện được địa chỉ email từ Google' });
+    }
+
+    const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+    const isMasterAdmin = userEmail === adminEmail;
+
+    // Tìm trong danh sách ủy quyền
+    let user = await dbService.getAuthorizedUser(userEmail);
+
+    if (isMasterAdmin) {
+      // Tự động gán quyền SUPER_ADMIN và APPROVED cho Master Admin
+      user = await dbService.upsertAuthorizedUser({
+        email: userEmail,
+        full_name: userName || 'Bác Sĩ Trần Văn Diệu',
+        avatar_url: userAvatar,
+        role: 'SUPER_ADMIN',
+        status: 'APPROVED',
+        approved_by: 'AUTO_MASTER_MATCH',
+      });
+    } else if (!user) {
+      // Người dùng mới xin quyền -> tạo PENDING (Phòng chờ)
+      user = await dbService.upsertAuthorizedUser({
+        email: userEmail,
+        full_name: userName || userEmail.split('@')[0],
+        avatar_url: userAvatar,
+        role: 'DOCTOR',
+        status: 'PENDING',
+      });
+
+      await dbService.recordAuditLog({
+        action: 'USER_ACCESS_REQUESTED',
+        ip: clientIp,
+        status: 'SUCCESS',
+        userAgent: req.headers['user-agent'],
+        details: { email: userEmail, fullName: userName },
+      });
+
+      return res.json({
+        success: true,
+        status: 'PENDING',
+        user,
+        message: 'Tài khoản đang chờ Bác sĩ Trần Văn Diệu phê duyệt.',
+      });
+    }
+
+    if (user.status === 'REVOKED') {
+      await dbService.recordAuditLog({
+        action: 'USER_LOGIN_BLOCKED_REVOKED',
+        ip: clientIp,
+        status: 'BLOCKED',
+        userAgent: req.headers['user-agent'],
+        details: { email: userEmail },
+      });
+      return res.status(403).json({
+        success: false,
+        status: 'REVOKED',
+        error: 'Quyền truy cập của tài khoản này đã bị thu hồi hoặc khóa.',
+      });
+    }
+
+    if (user.status === 'PENDING') {
+      return res.json({
+        success: true,
+        status: 'PENDING',
+        user,
+        message: 'Tài khoản đang chờ Bác sĩ Trần Văn Diệu phê duyệt.',
+      });
+    }
+
+    // Tài khoản đã APPROVED -> cấp JWT Token
+    const token = signToken({
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      fullName: user.full_name,
+      avatarUrl: user.avatar_url,
+    });
+
+    await dbService.recordAuditLog({
+      action: 'USER_LOGIN_SUCCESS',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { email: user.email, role: user.role },
+    });
+
+    return res.json({
+      success: true,
+      status: 'APPROVED',
+      token,
+      user,
+    });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 3. Lấy thông tin phiên làm việc hiện tại
+apiRouter.get('/auth/me', authMiddleware, async (req, res) => {
+  const user = (req as any).user;
+  return res.json({ success: true, user });
+});
+
+// 4. Danh sách tài khoản (Chỉ SUPER_ADMIN)
+apiRouter.get('/auth/users', authMiddleware, adminOnlyMiddleware, async (_req, res) => {
+  try {
+    const users = await dbService.listAuthorizedUsers();
+    return res.json({ success: true, users });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 5. Phê duyệt / Cập nhật vai trò / Thu hồi quyền tài khoản (Chỉ SUPER_ADMIN)
+apiRouter.post('/auth/approve-user', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const adminUser = (req as any).user;
+    const { email, status, role } = req.body || {};
+
+    if (!email || !status) {
+      return res.status(400).json({ success: false, error: 'Thiếu email hoặc status' });
+    }
+
+    const ok = await dbService.updateUserStatus(email, status, role, adminUser.email);
+    if (!ok) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản người dùng' });
+    }
+
+    await dbService.recordAuditLog({
+      action: 'USER_STATUS_UPDATED',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { targetEmail: email, newStatus: status, newRole: role, updatedBy: adminUser.email },
+    });
+
+    return res.json({ success: true, message: `Đã cập nhật tài khoản ${email} thành ${status}` });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 6. Nhập trước email người thân trong gia đình (Pre-approve whitelist)
+apiRouter.post('/auth/pre-approve', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const adminUser = (req as any).user;
+    const { email, fullName, role } = req.body || {};
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Thiếu email cần thêm vào danh sách trắng' });
+    }
+
+    const created = await dbService.preApproveUser(email, fullName || '', role || 'DOCTOR', adminUser.email);
+
+    await dbService.recordAuditLog({
+      action: 'USER_PRE_APPROVED',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { targetEmail: email, fullName, role, addedBy: adminUser.email },
+    });
+
+    return res.json({ success: true, user: created });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 7. Xóa tài khoản khỏi danh sách
+apiRouter.delete('/auth/user', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const adminUser = (req as any).user;
+    const email = String(req.query.email || req.body?.email || '');
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Thiếu email cần xóa' });
+    }
+
+    await dbService.deleteAuthorizedUser(email);
+
+    await dbService.recordAuditLog({
+      action: 'USER_DELETED',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { deletedEmail: email, deletedBy: adminUser.email },
+    });
+
+    return res.json({ success: true });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
 
 // Health & System Status
 apiRouter.get('/health', (_req, res) => {
@@ -71,7 +434,7 @@ apiRouter.get('/health', (_req, res) => {
 });
 
 // Audit Logs
-apiRouter.get('/security/audit-logs', async (_req, res) => {
+apiRouter.get('/security/audit-logs', authMiddleware, adminOnlyMiddleware, async (_req, res) => {
   try {
     const logs = await dbService.getRecentAuditLogs(100);
     return res.json({ success: true, count: logs.length, logs });
@@ -100,7 +463,7 @@ apiRouter.post('/security/audit-event', async (req, res) => {
 });
 
 // AI Copilot
-apiRouter.post('/ai/clinic-copilot', async (req, res) => {
+apiRouter.post('/ai/clinic-copilot', authMiddleware, async (req, res) => {
   try {
     const {
       action,
@@ -213,7 +576,7 @@ apiRouter.post('/ai/assistant', async (req, res) => {
 });
 
 // Tra cứu thuốc theo Dược Thư
-apiRouter.post('/ai/lookup-drug', async (req, res) => {
+apiRouter.post('/ai/lookup-drug', authMiddleware, async (req, res) => {
   try {
     const { drugName } = req.body;
     if (!drugName || typeof drugName !== 'string') {
@@ -259,6 +622,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ:
 });
 
 // Crawler Bot APIs
+// Crawler routes (Yêu cầu đăng nhập)
+apiRouter.use('/crawler', authMiddleware);
+
 apiRouter.get('/crawler/status', (_req, res) => {
   try {
     res.json({ success: true, ...crawlerService.getStatus() });
@@ -366,11 +732,12 @@ apiRouter.get('/cron/daily-maintenance', async (_req, res) => {
   }
 });
 
-// Clinic Sync (Cloud & Local Hybrid)
-apiRouter.get('/clinic/sync', async (req, res) => {
+// Clinic Sync (Cloud & Local Hybrid - Yêu cầu xác thực tài khoản đã APPROVED)
+apiRouter.get('/clinic/sync', authMiddleware, async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const clientEtag = req.headers['if-none-match'];
+    const authUser = (req as any).user;
 
     const { data, etag } = await dbService.getClinicData();
 
@@ -385,7 +752,10 @@ apiRouter.get('/clinic/sync', async (req, res) => {
       ip: clientIp,
       status: 'SUCCESS',
       userAgent: req.headers['user-agent'],
+      userEmail: authUser?.email,
       details: {
+        user: authUser?.email,
+        role: authUser?.role,
         patientsCount: (data?.patients as unknown[])?.length || 0,
         prescriptionsCount: (data?.prescriptions as unknown[])?.length || 0,
       },
@@ -397,9 +767,10 @@ apiRouter.get('/clinic/sync', async (req, res) => {
   }
 });
 
-apiRouter.post('/clinic/sync', async (req, res) => {
+apiRouter.post('/clinic/sync', authMiddleware, async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const authUser = (req as any).user;
     const result = await dbService.saveClinicData(req.body || {});
 
     dbService.recordAuditLog({
@@ -407,7 +778,10 @@ apiRouter.post('/clinic/sync', async (req, res) => {
       ip: clientIp,
       status: 'SUCCESS',
       userAgent: req.headers['user-agent'],
+      userEmail: authUser?.email,
       details: {
+        user: authUser?.email,
+        role: authUser?.role,
         updatedAt: result.updatedAt,
         etag: result.etag,
       },

@@ -35,6 +35,18 @@ import { ClinicReportsModal } from './components/ClinicReportsModal';
 import { PinLockModal } from './components/PinLockModal';
 import { AppointmentRecallModal } from './components/AppointmentRecallModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LoginModal } from './components/LoginModal';
+import { PendingApprovalScreen } from './components/PendingApprovalScreen';
+import { UserApprovalModal } from './components/UserApprovalModal';
+import { ClinicUser } from './types/auth';
+import {
+  getStoredToken,
+  getStoredUser,
+  clearSession,
+  fetchMe,
+  getAuthHeaders,
+  fetchUsers,
+} from './utils/authClient';
 import { useClinicalHotkeys } from './hooks/useClinicalHotkeys';
 import { parseCurrentRoute, navigateTo, subscribeToRouteChanges, RouteTab } from './utils/urlRouting';
 import { getCrawlerStatus } from './utils/crawlerClient';
@@ -212,6 +224,44 @@ export default function App() {
   });
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
+  // Zero-Trust Authentication State
+  const [authUser, setAuthUser] = useState<ClinicUser | null>(() => getStoredUser());
+  const [isUserApprovalModalOpen, setIsUserApprovalModalOpen] = useState(false);
+  const [pendingUsersCount, setPendingUsersCount] = useState(0);
+
+  // Validate session on app launch
+  useEffect(() => {
+    const token = getStoredToken();
+    if (!token) {
+      setAuthUser(null);
+      return;
+    }
+    fetchMe().then((res) => {
+      if (res.success && res.user) {
+        setAuthUser(res.user);
+      } else {
+        clearSession();
+        setAuthUser(null);
+      }
+    });
+  }, []);
+
+  const refreshPendingUsers = async () => {
+    if (authUser?.role === 'SUPER_ADMIN') {
+      const users = await fetchUsers();
+      const pending = users.filter((u) => u.status === 'PENDING').length;
+      setPendingUsersCount(pending);
+    }
+  };
+
+  useEffect(() => {
+    if (authUser?.role === 'SUPER_ADMIN') {
+      refreshPendingUsers();
+      const interval = setInterval(refreshPendingUsers, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [authUser]);
+
   // Đếm số lịch hẹn tái khám trong tuần tới
   const appointmentCount = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -289,6 +339,8 @@ export default function App() {
       setIsAiAssistantOpen,
       isGmailOpen: isGmailModalOpen,
       setIsGmailOpen: setIsGmailModalOpen,
+      isUserApprovalOpen: isUserApprovalModalOpen,
+      setIsUserApprovalOpen: setIsUserApprovalModalOpen,
     },
   });
 
@@ -304,17 +356,18 @@ export default function App() {
     });
   }, [isCrawlerBotOpen]);
 
-  // Two-Way LAN Synchronization (PC <-> iPhone over Home Wi-Fi)
+  // Two-Way LAN Synchronization (Cloud Supabase / Postgres)
   const pushStateToLanServer = async (payload?: {
     clinicInfo?: ClinicSettings;
     patients?: Patient[];
     prescriptions?: Prescription[];
     pharmacyCatalog?: MedicationCatalogItem[];
   }) => {
+    if (!authUser || authUser.status !== 'APPROVED') return;
     try {
       const res = await fetch('/api/clinic/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           clinicInfo: payload?.clinicInfo ?? clinicInfo,
           patients: payload?.patients ?? patients,
@@ -338,6 +391,7 @@ export default function App() {
     prescriptions?: Prescription[];
     pharmacyCatalog?: MedicationCatalogItem[];
   }) => {
+    if (!authUser || authUser.status !== 'APPROVED') return;
     if (isPullingLanRef.current || !hasHydratedLanRef.current) return;
     if (lanSyncDebounceTimerRef.current) {
       clearTimeout(lanSyncDebounceTimerRef.current);
@@ -348,9 +402,17 @@ export default function App() {
   };
 
   const pullOrPushLanSync = async () => {
+    if (!authUser || authUser.status !== 'APPROVED') return;
     isPullingLanRef.current = true;
     try {
-      const res = await fetch('/api/clinic/sync');
+      const res = await fetch('/api/clinic/sync', {
+        headers: getAuthHeaders(),
+      });
+      if (res.status === 401 || res.status === 403) {
+        clearSession();
+        setAuthUser(null);
+        return;
+      }
       if (!res.ok) return;
       const json = await res.json();
       if (json.hasServerData && json.data) {
@@ -385,16 +447,26 @@ export default function App() {
   };
 
   useEffect(() => {
-    pullOrPushLanSync();
-  }, []);
+    if (authUser?.status === 'APPROVED') {
+      pullOrPushLanSync();
+    }
+  }, [authUser]);
 
-  // Kế hoạch 2: Đồng bộ 2 chiều tức thì giữa PC & iPhone/iPad qua mạng LAN/Wi-Fi
+  // Đồng bộ 2 chiều qua Cloud Supabase / PostgreSQL
   // Polling nhẹ mỗi 8s kiểm tra xem có thay đổi từ thiết bị khác không
   useEffect(() => {
+    if (!authUser || authUser.status !== 'APPROVED') return;
     const syncInterval = setInterval(async () => {
       if (isPullingLanRef.current || document.hidden) return;
       try {
-        const res = await fetch('/api/clinic/sync');
+        const res = await fetch('/api/clinic/sync', {
+          headers: getAuthHeaders(),
+        });
+        if (res.status === 401 || res.status === 403) {
+          clearSession();
+          setAuthUser(null);
+          return;
+        }
         if (!res.ok) return;
         const json = await res.json();
         if (json.hasServerData && json.data && json.data.updatedAt) {
@@ -640,6 +712,66 @@ export default function App() {
     patients.find((p) => p.id === selectedPatientForExamId) ||
     patients[0];
 
+  // ================= ZERO-TRUST GATING (KHÔNG TẢI BỆNH ÁN KHI CHƯA ĐƯỢC DUYỆT) =================
+
+  // 1. Chưa đăng nhập -> Hiện màn hình đăng nhập chuẩn Y tế
+  if (!authUser) {
+    return (
+      <LoginModal
+        onLoginSuccess={(user) => {
+          setAuthUser(user);
+          hasHydratedLanRef.current = false;
+        }}
+        onPendingApproval={(user) => {
+          setAuthUser(user);
+        }}
+      />
+    );
+  }
+
+  // 2. Đã đăng nhập nhưng đang PENDING -> Hiện Phòng Chờ Phê Duyệt
+  if (authUser.status === 'PENDING') {
+    return (
+      <PendingApprovalScreen
+        user={authUser}
+        onApproved={(user) => {
+          setAuthUser(user);
+          hasHydratedLanRef.current = false;
+        }}
+        onLogout={() => {
+          clearSession();
+          setAuthUser(null);
+        }}
+      />
+    );
+  }
+
+  // 3. Tài khoản bị REVOKED -> Chặn truy cập hoàn toàn
+  if (authUser.status === 'REVOKED') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md text-center">
+        <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900 rounded-2xl p-6 shadow-2xl">
+          <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 mx-auto flex items-center justify-center mb-3">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-base font-bold text-rose-700 dark:text-rose-400">Quyền Truy Cập Bị Thu Hồi</h2>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+            Tài khoản của bạn ({authUser.email}) đã bị khóa hoặc thu hồi quyền truy cập. Vui lòng liên hệ Bác Sĩ Trần Văn Diệu để được hỗ trợ.
+          </p>
+          <button
+            onClick={() => {
+              clearSession();
+              setAuthUser(null);
+            }}
+            className="mt-5 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-700"
+          >
+            Đăng xuất tài khoản
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#edf2f0] dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-between transition-colors duration-200">
       <div>
@@ -675,16 +807,21 @@ export default function App() {
           onOpenUserGuide={() => setIsUserGuideModalOpen(true)}
           totalPatientsCount={patients.length}
           totalPrescriptionsCount={prescriptions.length}
-          googleUser={googleUser}
-          onGoogleLogin={(user) => setGoogleUser(user)}
-          onGoogleLogout={() =>
-            setGoogleUser({
-              name: 'Khách',
-              email: '',
-              role: 'Chưa đăng nhập',
-              isSignedIn: false,
-            })
-          }
+          googleUser={{
+            name: authUser.full_name || clinicInfo.doctorName,
+            email: authUser.email,
+            picture: authUser.avatar_url,
+            role: authUser.role === 'SUPER_ADMIN' ? 'Quản Trị Viên Tối Cao' : authUser.role,
+            isSignedIn: true,
+          }}
+          currentUser={authUser}
+          pendingUsersCount={pendingUsersCount}
+          onOpenUserApprovalModal={() => setIsUserApprovalModalOpen(true)}
+          onGoogleLogin={() => {}}
+          onGoogleLogout={() => {
+            clearSession();
+            setAuthUser(null);
+          }}
         />
 
         {/* Main Content Area */}
@@ -967,6 +1104,13 @@ export default function App() {
           />
         </ErrorBoundary>
       )}
+
+      {/* Phê Duyệt & Quản Lý Thành Viên Gia Đình (SUPER_ADMIN) */}
+      <UserApprovalModal
+        isOpen={isUserApprovalModalOpen}
+        onClose={() => setIsUserApprovalModalOpen(false)}
+        onUsersUpdated={refreshPendingUsers}
+      />
 
       {/* Kế hoạch 2: Màn Hình Khóa PIN Bảo Mật Cục Bộ (iOS/LAN) */}
       <PinLockModal

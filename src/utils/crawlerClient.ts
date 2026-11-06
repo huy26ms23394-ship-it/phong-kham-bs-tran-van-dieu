@@ -1,13 +1,21 @@
 import { CrawledDrugItem, CrawlerSettings, CrawlerStatusResponse } from '../types/crawler';
+import { getAuthHeaders } from './authClient';
 
 // Helper gọi fetch có timeout dứt khoát, chống treo browser vĩnh viễn
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 6500): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const authHeaders = getAuthHeaders();
+  const mergedHeaders = {
+    ...authHeaders,
+    ...(options.headers || {}),
+  };
+
   try {
     const res = await fetch(url, {
       ...options,
+      headers: mergedHeaders,
       signal: controller.signal,
     });
     return res;

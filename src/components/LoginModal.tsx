@@ -1,239 +1,353 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  X,
+  ShieldCheck,
+  Stethoscope,
+  Lock,
   Mail,
   UserCheck,
-  ShieldCheck,
+  AlertCircle,
+  KeyRound,
+  Sparkles,
+  ArrowRight,
+  ShieldAlert,
 } from 'lucide-react';
-import { GoogleUser } from './AuthScreen';
+import { loginAdmin, loginGoogle } from '../utils/authClient';
+import { ClinicUser } from '../types/auth';
 
 interface LoginModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  currentUser: GoogleUser;
-  onLogin: (user: GoogleUser) => void;
+  onLoginSuccess: (user: ClinicUser) => void;
+  onPendingApproval: (user: ClinicUser) => void;
 }
 
-const PRESET_ACCOUNTS = [
-  {
-    name: 'Bác Sĩ Trần Văn Diệu',
-    email: 'tranminhhuy3031998@gmail.com',
-    role: 'Bác Sĩ Trưởng Phòng Khám',
-    cchn: '04512/HCM-CCHN',
-    avatar: 'D',
-  },
-  {
-    name: 'Dược Sĩ Mai Phương',
-    email: 'duocsi.maiphuong@gmail.com',
-    role: 'Dược Sĩ Phụ Trách Nhà Thuốc',
-    cchn: '09823/HCM-DS',
-    avatar: 'P',
-  },
-  {
-    name: 'ĐD. Nguyễn Thu Hà',
-    email: 'letan.clinicdieu@gmail.com',
-    role: 'Điều Dưỡng & Tiếp Đón',
-    cchn: '11204/HCM-DD',
-    avatar: 'H',
-  },
-];
-
 export const LoginModal: React.FC<LoginModalProps> = ({
-  isOpen,
-  onClose,
-  currentUser,
-  onLogin,
+  onLoginSuccess,
+  onPendingApproval,
 }) => {
-  const [customEmail, setCustomEmail] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Bác Sĩ Trưởng Phòng Khám');
-  const [isLoading, setIsLoading] = useState(false);
+  const [tab, setTab] = useState<'google' | 'admin'>('google');
 
-  if (!isOpen) return null;
+  // Master Admin form state
+  const [adminUser, setAdminUser] = useState('tranminhhuy3031998@gmail.com');
+  const [adminPass, setAdminPass] = useState('DieuClinic@2026!');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
 
-  const handleSelectPreset = (acc: typeof PRESET_ACCOUNTS[0]) => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      onLogin({
-        name: acc.name,
-        email: acc.email,
-        role: acc.role,
-        isSignedIn: true,
-      });
-      onClose();
-    }, 250);
+  // Google form / simulation state
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleName, setGoogleName] = useState('');
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+
+  const googleBtnContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load Google Identity Services (GSI) script
+  useEffect(() => {
+    const scriptId = 'google-gsi-client';
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        initGoogleButton();
+      };
+      document.body.appendChild(script);
+    } else {
+      initGoogleButton();
+    }
+  }, [tab]);
+
+  const initGoogleButton = () => {
+    if (tab !== 'google') return;
+    const google = (window as any).google;
+    if (google && googleBtnContainerRef.current) {
+      try {
+        google.accounts.id.initialize({
+          client_id:
+            (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+            '1000000000000-dummy-google-client-id.apps.googleusercontent.com',
+          callback: async (response: any) => {
+            if (response.credential) {
+              setIsLoadingGoogle(true);
+              setGoogleError(null);
+              const res = await loginGoogle({ credential: response.credential });
+              setIsLoadingGoogle(false);
+              if (res.success && res.user) {
+                if (res.status === 'APPROVED') {
+                  onLoginSuccess(res.user);
+                } else if (res.status === 'PENDING') {
+                  onPendingApproval(res.user);
+                }
+              } else {
+                setGoogleError(res.error || res.message || 'Đăng nhập Google thất bại');
+              }
+            }
+          },
+        });
+
+        googleBtnContainerRef.current.innerHTML = '';
+        google.accounts.id.renderButton(googleBtnContainerRef.current, {
+          theme: 'outline',
+          size: 'large',
+          width: 340,
+          text: 'signin_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+        });
+      } catch (err) {
+        console.warn('Google GSI button render exception:', err);
+      }
+    }
   };
 
-  const handleCustomSubmit = (e: React.FormEvent) => {
+  const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customEmail) return;
+    if (!adminUser.trim() || !adminPass.trim()) {
+      setAdminError('Vui lòng nhập đầy đủ tài khoản và mật khẩu quản trị');
+      return;
+    }
+    setIsLoadingAdmin(true);
+    setAdminError(null);
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      onLogin({
-        name: customName.trim() || `Bác Sĩ ${customEmail.split('@')[0]}`,
-        email: customEmail.trim(),
-        role: selectedRole,
-        isSignedIn: true,
-      });
-      onClose();
-    }, 250);
+    const res = await loginAdmin(adminUser.trim(), adminPass.trim());
+    setIsLoadingAdmin(false);
+
+    if (res.success && res.user) {
+      onLoginSuccess(res.user);
+    } else {
+      setAdminError(res.error || 'Tài khoản hoặc mật khẩu quản trị viên không chính xác');
+    }
+  };
+
+  const handleQuickGoogleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleEmail.trim()) {
+      setGoogleError('Vui lòng nhập địa chỉ email Google');
+      return;
+    }
+    setIsLoadingGoogle(true);
+    setGoogleError(null);
+
+    const res = await loginGoogle({
+      email: googleEmail.trim().toLowerCase(),
+      name: googleName.trim() || googleEmail.split('@')[0],
+    });
+    setIsLoadingGoogle(false);
+
+    if (res.success && res.user) {
+      if (res.status === 'APPROVED') {
+        onLoginSuccess(res.user);
+      } else {
+        onPendingApproval(res.user);
+      }
+    } else {
+      setGoogleError(res.error || res.message || 'Không thể xác thực tài khoản Google');
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white dark:bg-[#0e121b] rounded-md max-w-md w-full shadow-2xl border border-slate-300 dark:border-slate-700 overflow-hidden my-6">
-        {/* Modal Header */}
-        <div className="bg-slate-900 dark:bg-[#131824] text-white px-5 py-3.5 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-md bg-emerald-800 border border-emerald-600 flex items-center justify-center text-emerald-100">
-              <ShieldCheck className="w-4.5 h-4.5" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-sm text-white uppercase tracking-tight">
-                Đăng Nhập Gmail / Đổi Tài Khoản
-              </h3>
-              <p className="text-[11px] font-mono text-slate-400">
-                GOOGLE WORKSPACE CLINICAL AUTH
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-emerald-800 to-teal-900 p-6 text-white text-center relative">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner">
+            <Stethoscope className="w-8 h-8 text-emerald-300" />
           </div>
+          <h2 className="text-lg font-black tracking-tight uppercase">
+            Phòng Khám BS. Trần Văn Diệu
+          </h2>
+          <p className="text-xs text-emerald-200 mt-1 font-medium">
+            Hệ thống Quản lý Y tế & Kê đơn Zero-Trust (Bảo mật Khép kín)
+          </p>
+          <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-400/30 text-[11px] text-emerald-200 font-mono">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            Nghị định 333/2026/NĐ-CP · Chuẩn Y Tế
+          </div>
+        </div>
+
+        {/* Tab Selection */}
+        <div className="grid grid-cols-2 p-1.5 bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs font-bold">
           <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition-colors cursor-pointer"
+            type="button"
+            onClick={() => setTab('google')}
+            className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              tab === 'google'
+                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
           >
-            <X className="w-4 h-4" />
+            <UserCheck className="w-4 h-4" />
+            Đăng nhập Google SSO
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('admin')}
+            className={`py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              tab === 'admin'
+                ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            <KeyRound className="w-4 h-4" />
+            Master Admin
           </button>
         </div>
 
-        {/* Modal Content */}
-        <div className="p-5 space-y-4 text-xs">
-          {/* Current Status */}
-          {currentUser.isSignedIn && (
-            <div className="p-3 bg-slate-50 dark:bg-[#131824] border border-slate-200 dark:border-slate-800 rounded-md flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider font-mono text-emerald-700 dark:text-emerald-400 font-bold">
-                  TÀI KHOẢN HIỆN TẠI:
-                </div>
-                <div className="text-xs font-extrabold text-slate-900 dark:text-white uppercase mt-0.5">
-                  {currentUser.name}
-                </div>
-                <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                  {currentUser.email}
-                </div>
+        <div className="p-6">
+          {tab === 'google' ? (
+            /* TAB 1: GOOGLE SSO + ONE-CLICK APPROVAL */
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Dành cho Bác sĩ Diệu và người thân trong gia đình. Đăng nhập trực tiếp bằng tài khoản Google để xác thực danh tính.
+                </p>
               </div>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-900 text-emerald-100 font-mono font-bold text-[10px]">
-                {currentUser.role}
-              </span>
-            </div>
-          )}
 
-          {/* Fast Switch Preset */}
-          <div>
-            <div className="text-[10px] uppercase tracking-wider font-mono font-bold text-slate-500 dark:text-slate-400 mb-1.5">
-              CHỌN NHANH TÀI KHOẢN GMAIL PHÒNG KHÁM:
-            </div>
-            <div className="divide-y divide-slate-200 dark:divide-slate-800 border border-slate-300 dark:border-slate-700 rounded-md">
-              {PRESET_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => handleSelectPreset(acc)}
-                  className="w-full text-left p-2.5 bg-white dark:bg-[#090b10] hover:bg-emerald-50/50 dark:hover:bg-[#141c2b] transition-colors flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-md bg-emerald-800 text-white font-mono font-bold flex items-center justify-center text-xs">
-                      {acc.avatar}
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                        {acc.name}
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                        {acc.email}
-                      </div>
-                    </div>
+              {/* Official Google GSI Button Container */}
+              <div className="flex flex-col items-center justify-center min-h-[44px]">
+                <div ref={googleBtnContainerRef} className="w-full flex justify-center"></div>
+              </div>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                <span className="flex-shrink mx-3 text-[11px] font-semibold text-slate-400 uppercase">
+                  Hoặc đăng nhập nhanh bằng Email
+                </span>
+                <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+              </div>
+
+              <form onSubmit={handleQuickGoogleSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Địa chỉ Email Google (@gmail.com)
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={googleEmail}
+                      onChange={(e) => setGoogleEmail(e.target.value)}
+                      placeholder="vidu@gmail.com"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      required
+                    />
                   </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-800 group-hover:text-white text-slate-700 dark:text-slate-300 rounded-md transition-colors">
-                    CHỌN →
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
 
-          {/* Or Custom Gmail */}
-          <div className="relative py-1">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-            </div>
-            <div className="relative flex justify-center text-[10px] uppercase font-mono">
-              <span className="bg-white dark:bg-[#0e121b] px-3 text-slate-400">
-                HOẶC NHẬP ĐỊA CHỈ GMAIL KHÁC
-              </span>
-            </div>
-          </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Họ và tên (Tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={googleName}
+                    onChange={(e) => setGoogleName(e.target.value)}
+                    placeholder="BS. Trần Văn Diệu / Người thân"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
 
-          <form onSubmit={handleCustomSubmit} className="space-y-3">
-            <div>
-              <label className="block font-mono text-[11px] uppercase font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Địa chỉ Gmail:
-              </label>
-              <div className="relative">
-                <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="email"
-                  required
-                  value={customEmail}
-                  onChange={(e) => setCustomEmail(e.target.value)}
-                  placeholder="bacsi.dieutri@gmail.com"
-                  className="w-full h-8.5 pl-8 pr-3 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#090b10] text-slate-900 dark:text-slate-100 font-mono text-xs focus:border-emerald-600 focus:outline-none"
-                />
-              </div>
-            </div>
+                {googleError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{googleError}</span>
+                  </div>
+                )}
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-mono text-[11px] uppercase font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Họ tên Bác Sĩ:
-                </label>
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="BS. Trần Văn Diệu"
-                  className="w-full h-8.5 px-2.5 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#090b10] text-slate-900 dark:text-slate-100 font-semibold text-xs focus:border-emerald-600 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-mono text-[11px] uppercase font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Vai trò:
-                </label>
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-full h-8.5 px-2 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#090b10] text-slate-900 dark:text-slate-100 text-xs focus:border-emerald-600 focus:outline-none"
+                <button
+                  type="submit"
+                  disabled={isLoadingGoogle}
+                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                 >
-                  <option value="Bác Sĩ Trưởng Phòng Khám">Bác Sĩ Trưởng</option>
-                  <option value="Bác Sĩ Khám Bệnh">Bác Sĩ Khám</option>
-                  <option value="Dược Sĩ Phụ Trách">Dược Sĩ</option>
-                  <option value="Điều Dưỡng">Điều Dưỡng</option>
-                </select>
+                  {isLoadingGoogle ? 'Đang xác thực Google...' : 'Xác Thực & Tiếp Tục'}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </form>
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  Quy trình Phòng chờ Phê duyệt:
+                </p>
+                <p>
+                  • Email của Bác sĩ Diệu (<code className="font-bold">tranminhhuy3031998@gmail.com</code>) sẽ tự động vào thẳng quyền Quản Trị Viên Tối Cao.
+                </p>
+                <p>
+                  • Email người thân chưa được duyệt sẽ chuyển vào <strong>Phòng Chờ</strong> để Bác sĩ Diệu phê duyệt vai trò trước khi xem đơn thuốc.
+                </p>
               </div>
             </div>
+          ) : (
+            /* TAB 2: MASTER ADMIN (CỐ ĐỊNH & DỰ PHÒNG) */
+            <form onSubmit={handleAdminSubmit} className="space-y-4">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300">
+                <p className="font-bold">Tài khoản Quản trị viên Dự phòng Cố định</p>
+                <p className="mt-0.5">
+                  Quyền lực cao nhất, luôn vào thẳng hệ thống ngay cả khi chưa kết nối Google OAuth.
+                </p>
+              </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-9 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold rounded-md text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>XÁC NHẬN ĐĂNG NHẬP GMAIL</span>
-            </button>
-          </form>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Email / Username Quản Trị
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={adminUser}
+                    onChange={(e) => setAdminUser(e.target.value)}
+                    placeholder="tranminhhuy3031998@gmail.com"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Mật khẩu Quản Trị Viên
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    value={adminPass}
+                    onChange={(e) => setAdminPass(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    required
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Mật khẩu mặc định khởi tạo: <code className="font-bold text-emerald-700 dark:text-emerald-400">DieuClinic@2026!</code>
+                </p>
+              </div>
+
+              {adminError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{adminError}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoadingAdmin}
+                className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                {isLoadingAdmin ? 'Đang kiểm tra quyền Admin...' : 'Đăng Nhập Master Admin'}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800 text-center">
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            Dữ liệu bệnh nhân được mã hóa AES-256 & lưu trữ độc quyền trên Cloud Supabase.
+          </p>
         </div>
       </div>
     </div>

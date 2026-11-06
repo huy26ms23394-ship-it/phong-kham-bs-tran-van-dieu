@@ -26,6 +26,8 @@ export interface UseClinicalHotkeysProps {
     setIsAiAssistantOpen: React.Dispatch<React.SetStateAction<boolean>>;
     isGmailOpen: boolean;
     setIsGmailOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    isUserApprovalOpen?: boolean;
+    setIsUserApprovalOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   };
 }
 
@@ -100,6 +102,12 @@ export function useClinicalHotkeys({
           modals.setIsGmailOpen(false);
           return;
         }
+        if (modals.isUserApprovalOpen && modals.setIsUserApprovalOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          modals.setIsUserApprovalOpen(false);
+          return;
+        }
       }
 
       const target = e.target as HTMLElement | null;
@@ -138,6 +146,12 @@ export function useClinicalHotkeys({
         }
 
         const lowerKey = e.key.toLowerCase();
+        if (lowerKey === 'u' && modals.setIsUserApprovalOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          modals.setIsUserApprovalOpen((prev) => !prev);
+          return;
+        }
         if (lowerKey === 'n') {
           e.preventDefault();
           e.stopPropagation();
