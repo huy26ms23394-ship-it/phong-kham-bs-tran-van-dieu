@@ -78,7 +78,14 @@ export default function App() {
   const [clinicInfo, setClinicInfo] = useState<ClinicSettings>(() => {
     try {
       const saved = localStorage.getItem('mediba_clinic_info_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_CLINIC_SETTINGS,
+          ...parsed,
+          clinicName: parsed.clinicName || DEFAULT_CLINIC_SETTINGS.clinicName,
+        };
+      }
     } catch {}
     return DEFAULT_CLINIC_SETTINGS;
   });
@@ -347,7 +354,14 @@ export default function App() {
       if (!res.ok) return;
       const json = await res.json();
       if (json.hasServerData && json.data) {
-        if (json.data.clinicInfo) setClinicInfo(json.data.clinicInfo);
+        if (json.data.clinicInfo) {
+          setClinicInfo((prev) => ({
+            ...DEFAULT_CLINIC_SETTINGS,
+            ...prev,
+            ...json.data.clinicInfo,
+            clinicName: json.data.clinicInfo.clinicName || prev.clinicName || DEFAULT_CLINIC_SETTINGS.clinicName,
+          }));
+        }
         if (Array.isArray(json.data.patients) && json.data.patients.length > 0) {
           setPatients(json.data.patients);
         }
@@ -385,7 +399,14 @@ export default function App() {
         const json = await res.json();
         if (json.hasServerData && json.data && json.data.updatedAt) {
           if (lastSyncedAt && json.data.updatedAt > lastSyncedAt) {
-            if (json.data.clinicInfo) setClinicInfo(json.data.clinicInfo);
+            if (json.data.clinicInfo) {
+              setClinicInfo((prev) => ({
+                ...DEFAULT_CLINIC_SETTINGS,
+                ...prev,
+                ...json.data.clinicInfo,
+                clinicName: json.data.clinicInfo.clinicName || prev.clinicName || DEFAULT_CLINIC_SETTINGS.clinicName,
+              }));
+            }
             if (Array.isArray(json.data.patients) && json.data.patients.length > 0) {
               setPatients(json.data.patients);
             }

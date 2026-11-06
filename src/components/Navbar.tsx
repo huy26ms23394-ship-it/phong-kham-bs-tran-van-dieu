@@ -134,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Brand Identity */}
           <div
             className="flex items-center gap-2 min-w-0 select-none cursor-default"
-            title={`${clinicInfo.clinicName} · CCHN: ${clinicInfo.licenseNumber} · ${clinicInfo.doctorTitle} ${clinicInfo.doctorName} · ĐT: ${clinicInfo.phone}`}
+            title={`${clinicInfo?.clinicName || 'Phòng Khám BS. Trần Văn Diệu'} · CCHN: ${clinicInfo?.licenseNumber || '08362/SYT-GPHĐ'} · ${clinicInfo?.doctorTitle || 'BS.'} ${clinicInfo?.doctorName || 'Trần Văn Diệu'} · ĐT: ${clinicInfo?.phone || ''}`}
           >
             <div className="w-8 h-8 rounded-md bg-emerald-700 dark:bg-emerald-600 flex items-center justify-center text-white shadow-2xs shrink-0">
               <Stethoscope className="w-4.5 h-4.5 text-white" aria-hidden="true" />
@@ -142,10 +142,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="min-w-0">
               <span className="text-xs sm:text-sm font-extrabold tracking-tight text-slate-900 dark:text-slate-100 uppercase truncate block">
                 <span className="sm:hidden">PK. BS. Diệu</span>
-                <span className="hidden sm:inline">{clinicInfo.clinicName.replace('PHÒNG KHÁM ', 'PK. ')}</span>
+                <span className="hidden sm:inline">{(clinicInfo?.clinicName || 'PHÒNG KHÁM BÁC SĨ TRẦN VĂN DIỆU').replace('PHÒNG KHÁM ', 'PK. ')}</span>
               </span>
               <span className="hidden md:inline text-[10px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200/80 dark:border-emerald-800/80 shrink-0">
-                CCHN: {clinicInfo.licenseNumber}
+                CCHN: {clinicInfo?.licenseNumber || '08362/SYT-GPHĐ'}
               </span>
             </div>
           </div>

@@ -361,7 +361,7 @@ export const AppointmentRecallModal: React.FC<AppointmentRecallModalProps> = ({
                             {/* Zalo Button */}
                             {item.phone && (
                               <a
-                                href={`https://zalo.me/${item.phone.replace(/[^0-9]/g, '')}`}
+                                href={`https://zalo.me/${(item.phone || '').replace(/[^0-9]/g, '')}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="px-2 py-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded text-[11px] font-bold flex items-center gap-1 border border-blue-200 dark:border-blue-800 cursor-pointer"

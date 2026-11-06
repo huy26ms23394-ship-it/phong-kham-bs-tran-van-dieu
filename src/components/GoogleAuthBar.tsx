@@ -60,7 +60,7 @@ export const GoogleAuthBar: React.FC<GoogleAuthBarProps> = ({
   };
 
   // Compact short name for navbar pill (e.g. "Bác Sĩ Trần Văn Diệu" -> "BS. Diệu")
-  const shortDoctorName = currentUser.name
+  const shortDoctorName = (currentUser?.name || 'BS. Trần Văn Diệu')
     .replace(/^Bác Sĩ\s+/i, 'BS. ')
     .replace(/^BS\.\s+Trần Văn\s+/i, 'BS. ');
 
