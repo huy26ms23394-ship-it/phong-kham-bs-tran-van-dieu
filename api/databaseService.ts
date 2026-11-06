@@ -230,7 +230,8 @@ export class DatabaseService {
   /**
    * Lưu dữ liệu phòng khám
    */
-  public async saveClinicData(incoming: Partial<ClinicSyncPayload>): Promise<{ success: boolean; updatedAt: string; etag: string }> {
+  public async saveClinicData(rawIncoming: Partial<ClinicSyncPayload> | { data: Partial<ClinicSyncPayload> }): Promise<{ success: boolean; updatedAt: string; etag: string }> {
+    const incoming = (rawIncoming as any)?.data ? (rawIncoming as any).data : rawIncoming;
     const current = (await this.getClinicData()).data || {};
     const updatedAt = new Date().toISOString();
     const version = ((current.version as number) || 0) + 1;
