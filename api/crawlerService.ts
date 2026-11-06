@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
-import { CrawledDrugItem, CrawlerSettings, CrawlerLogEntry, CrawlerStatusResponse } from './crawlerTypes';
+import { CrawledDrugItem, CrawlerSettings, CrawlerLogEntry, CrawlerStatusResponse } from './crawlerTypes.js';
 
 const DATA_DIR = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
 const STORE_FILE = path.join(DATA_DIR, 'crawler_store.json');

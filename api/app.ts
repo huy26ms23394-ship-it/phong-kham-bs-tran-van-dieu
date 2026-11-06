@@ -1,8 +1,8 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { crawlerService } from './crawlerService';
-import { dbService } from './databaseService';
+import { crawlerService } from './crawlerService.js';
+import { dbService } from './databaseService.js';
 
 dotenv.config();
 
