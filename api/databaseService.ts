@@ -48,9 +48,18 @@ export class DatabaseService {
     const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
     if (dbUrl) {
       try {
+        let connectionString = dbUrl;
+        try {
+          // Xóa tham số sslmode khỏi connection string để tránh pg-connection-string ghi đè thành ssl: true
+          const parsed = new URL(dbUrl);
+          parsed.searchParams.delete('sslmode');
+          parsed.searchParams.delete('ssl');
+          connectionString = parsed.toString();
+        } catch {}
+
         this.pgPool = new Pool({
-          connectionString: dbUrl,
-          ssl: dbUrl.includes('localhost') ? false : { rejectUnauthorized: false },
+          connectionString,
+          ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
           max: 5,
           idleTimeoutMillis: 10000,
           connectionTimeoutMillis: 5000,
@@ -61,7 +70,7 @@ export class DatabaseService {
       }
     }
 
-    this.supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    this.supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
     this.supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!process.env.VERCEL) {
@@ -411,6 +420,7 @@ export class DatabaseService {
    */
   public async pingDatabase(): Promise<{ success: boolean; message: string; timestamp: string }> {
     const now = new Date().toISOString();
+    let lastError = '';
     if (this.pgPool) {
       try {
         await this.ensureCloudTables();
@@ -421,7 +431,8 @@ export class DatabaseService {
           timestamp: now,
         };
       } catch (err: any) {
-        return { success: false, message: `PostgreSQL Ping error: ${err.message}`, timestamp: now };
+        console.warn('[DatabaseService] pgPool ping failed, attempting Supabase REST fallback:', err.message);
+        lastError = err.message;
       }
     }
 
@@ -443,8 +454,8 @@ export class DatabaseService {
     }
 
     return {
-      success: true,
-      message: 'Local storage active (no cloud DB configured)',
+      success: !lastError,
+      message: lastError ? `PostgreSQL Ping error: ${lastError}` : 'Local storage active (no cloud DB configured)',
       timestamp: now,
     };
   }
