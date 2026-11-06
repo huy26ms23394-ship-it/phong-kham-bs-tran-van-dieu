@@ -1,0 +1,1419 @@
+{
+  "clinicInfo": {
+    "clinicName": "PHÒNG KHÁM BÁC SĨ TRẦN VĂN DIỆU",
+    "doctorName": "Bác Sĩ Trần Văn Diệu",
+    "doctorTitle": "Bác Sĩ Chuyên Khoa Nội - Đa Khoa Gia Đình",
+    "specialty": "Khám & Điều Trị Nội Khoa • Tim Mạch • Hô Hấp • Tiêu Hóa",
+    "licenseNumber": "08362/SYT-GPHĐ",
+    "practicingCertificate": "04512/HCM-CCHN",
+    "address": "158 Nguyễn Trãi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh",
+    "phone": "0913 678 999 • (028) 3822 5678",
+    "consultingHours": "Sáng: 07:30 - 11:30 | Chiều: 14:00 - 19:30 (Thứ 2 - Chủ Nhật)",
+    "bankName": "Ngân hàng TMCP Ngoại Thương Việt Nam (Vietcombank)",
+    "bankId": "VCB",
+    "bankAccountNo": "0071000987654",
+    "bankAccountName": "TRAN VAN DIEU",
+    "consultationFee": 120000
+  },
+  "patients": [
+    {
+      "id": "pat-001",
+      "patientCode": "BN-2026-001",
+      "fullName": "Nguyễn Văn An",
+      "birthYear": 1958,
+      "gender": "nam",
+      "phone": "0918 123 456",
+      "address": "42 Trần Phú, Phường 4, Quận 5, TP.HCM",
+      "healthInsuranceNumber": "GD-4-79-01-23456789",
+      "bloodType": "O+",
+      "allergies": [
+        "Dị ứng Penicillin (nổi mẩn đỏ ngứa)"
+      ],
+      "chronicConditions": [
+        "Tăng huyết áp độ 2",
+        "Rối loạn lipid máu"
+      ],
+      "emergencyContactName": "Nguyễn Thị Hoa (Con gái)",
+      "emergencyContactPhone": "0903 888 777",
+      "notes": "Bệnh nhân tái khám định kỳ mỗi tháng, cần kiểm tra huyết áp kỹ.",
+      "createdAt": "2026-10-20T08:30:00Z",
+      "updatedAt": "2026-10-20T08:30:00Z"
+    },
+    {
+      "id": "pat-002",
+      "patientCode": "BN-2026-002",
+      "fullName": "Lê Thị Mỹ Hoa",
+      "birthYear": 1972,
+      "gender": "nu",
+      "phone": "0903 234 567",
+      "address": "89 Cách Mạng Tháng Tám, Quận 3, TP.HCM",
+      "healthInsuranceNumber": "DN-4-79-02-98765432",
+      "bloodType": "A+",
+      "allergies": [
+        "Không có tiền sử dị ứng"
+      ],
+      "chronicConditions": [
+        "Viêm dạ dày trào ngược (GERD)",
+        "Mất ngủ"
+      ],
+      "emergencyContactName": "Lê Văn Nam (Chồng)",
+      "emergencyContactPhone": "0912 345 678",
+      "notes": "Ợ nóng, đau rát vùng thượng vị sau khi ăn no.",
+      "createdAt": "2026-10-22T09:15:00Z",
+      "updatedAt": "2026-10-22T09:15:00Z"
+    },
+    {
+      "id": "pat-003",
+      "patientCode": "BN-2026-003",
+      "fullName": "Trần Hoàng Long",
+      "birthYear": 1995,
+      "gender": "nam",
+      "phone": "0938 456 789",
+      "address": "124 Lê Lợi, Quận 1, TP.HCM",
+      "healthInsuranceNumber": "GD-4-79-03-55667788",
+      "bloodType": "B+",
+      "allergies": [
+        "Không có dị ứng"
+      ],
+      "chronicConditions": [
+        "Không có"
+      ],
+      "emergencyContactName": "Trần Văn Hùng (Bố)",
+      "emergencyContactPhone": "0908 111 222",
+      "notes": "Sốt cao 38.5 độ C, đau rát họng, ho có đờm trắng.",
+      "createdAt": "2026-10-26T14:20:00Z",
+      "updatedAt": "2026-10-26T14:20:00Z"
+    }
+  ],
+  "prescriptions": [
+    {
+      "id": "rx-20261026-01",
+      "prescriptionCode": "TOA-20261026-001",
+      "patientId": "pat-001",
+      "patientName": "Nguyễn Văn An",
+      "patientBirthYear": 1958,
+      "patientGender": "nam",
+      "patientAddress": "42 Trần Phú, Phường 4, Quận 5, TP.HCM",
+      "patientPhone": "0918 123 456",
+      "patientHealthInsuranceNumber": "GD-4-79-01-23456789",
+      "patientAllergies": [
+        "Dị ứng Penicillin (nổi mẩn đỏ ngứa)"
+      ],
+      "guardianName": "Nguyễn Thị Hoa (Con gái)",
+      "clinicInfo": {
+        "clinicName": "PHÒNG KHÁM BÁC SĨ TRẦN VĂN DIỆU",
+        "doctorName": "Bác Sĩ Trần Văn Diệu",
+        "doctorTitle": "Bác Sĩ Chuyên Khoa Nội - Đa Khoa Gia Đình",
+        "specialty": "Khám & Điều Trị Nội Khoa • Tim Mạch • Hô Hấp • Tiêu Hóa",
+        "licenseNumber": "08362/SYT-GPHĐ",
+        "practicingCertificate": "04512/HCM-CCHN",
+        "address": "158 Nguyễn Trãi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh",
+        "phone": "0913 678 999 • (028) 3822 5678",
+        "consultingHours": "Sáng: 07:30 - 11:30 | Chiều: 14:00 - 19:30 (Thứ 2 - Chủ Nhật)",
+        "bankName": "Ngân hàng TMCP Ngoại Thương Việt Nam (Vietcombank)",
+        "bankId": "VCB",
+        "bankAccountNo": "0071000987654",
+        "bankAccountName": "TRAN VAN DIEU",
+        "consultationFee": 120000
+      },
+      "examinationDate": "2026-10-26",
+      "symptoms": "Thỉnh thoảng choáng váng nhẹ buổi sáng, hồi hộp nhẹ.",
+      "vitalSigns": {
+        "bloodPressureSystolic": 142,
+        "bloodPressureDiastolic": 88,
+        "heartRate": 76,
+        "temperature": 36.8,
+        "weightKg": 68,
+        "heightCm": 167
+      },
+      "diagnosis": "Tăng huyết áp nguyên phát (I10) - Rối loạn lipid máu hỗn hợp (E78)",
+      "icd10Code": "I10, E78",
+      "medications": [
+        {
+          "id": "med-01",
+          "name": "Amlor (Amlodipine)",
+          "activeIngredient": "Amlodipine besylate",
+          "strength": "5mg",
+          "form": "Viên nén",
+          "unit": "viên",
+          "totalQuantity": 30,
+          "dosage": {
+            "morning": 1,
+            "noon": 0,
+            "afternoon": 0,
+            "evening": 0,
+            "timing": "sau_an",
+            "customTimingNote": "Uống sau bữa ăn sáng"
+          },
+          "durationDays": 30,
+          "instructions": "Uống 1 viên sau ăn sáng mỗi ngày vào giờ cố định.",
+          "warningOrNote": "Kiểm tra huyết áp mỗi sáng, không tự ý ngưng thuốc đột ngột."
+        },
+        {
+          "id": "med-02",
+          "name": "Lipitor (Atorvastatin)",
+          "activeIngredient": "Atorvastatin calcium",
+          "strength": "20mg",
+          "form": "Viên nén",
+          "unit": "viên",
+          "totalQuantity": 30,
+          "dosage": {
+            "morning": 0,
+            "noon": 0,
+            "afternoon": 0,
+            "evening": 1,
+            "timing": "truoc_ngu",
+            "customTimingNote": "Uống lúc 20:30 tối"
+          },
+          "durationDays": 30,
+          "instructions": "Uống 1 viên buổi tối trước khi đi ngủ.",
+          "warningOrNote": "Hạ mỡ máu, bảo vệ thành mạch tim mạch."
+        },
+        {
+          "id": "med-03",
+          "name": "Aspirin pH8",
+          "activeIngredient": "Acid acetylsalicylic",
+          "strength": "81mg",
+          "form": "Viên bao tan trong ruột",
+          "unit": "viên",
+          "totalQuantity": 30,
+          "dosage": {
+            "morning": 0,
+            "noon": 1,
+            "afternoon": 0,
+            "evening": 0,
+            "timing": "sau_an",
+            "customTimingNote": "Uống sau bữa cơm trưa với nhiều nước"
+          },
+          "durationDays": 30,
+          "instructions": "Uống 1 viên sau bữa ăn trưa no với 1 cốc nước đầy.",
+          "warningOrNote": "Chống kết tập tiểu cầu ngừa biến cố tim mạch."
+        }
+      ],
+      "doctorAdvice": "1. Đo huyết áp mỗi ngày lúc nghỉ ngơi và ghi vào sổ theo dõi.\n2. Ăn nhạt (giảm lượng muối, bột nêm, nước chấm trong nấu ăn).\n3. Kiêng mỡ động vật, phủ tạng động vật, đồ chiên xào nhiều dầu.\n4. Tập thể dục đi bộ nhẹ nhàng 30 phút/ngày.\n5. Tái khám đúng hẹn hoặc khi có dấu hiệu chóng mặt nhiều, khó thở.",
+      "followUpDate": "2026-11-26",
+      "status": "active",
+      "createdAt": "2026-10-26T08:45:00Z",
+      "updatedAt": "2026-10-26T08:45:00Z"
+    }
+  ],
+  "pharmacyCatalog": [
+    {
+      "id": "crawled_1793722924919_blkdc",
+      "name": "Alpha Choay (Đợt 3/11/2026)",
+      "activeIngredient": "Alphachymotrypsin",
+      "strength": "21 microkatals (4200 IU)",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Kháng viêm - Phù nề",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 2,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 2,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 2 viên x 2 lần/ngày với 240ml nước hoặc ngậm dưới lưỡi cho tan từ từ.",
+      "warningNote": "Men kháng viêm giảm phù nề mô mềm sau chấn thương, viêm họng, viêm xoang."
+    },
+    {
+      "id": "crawled_1793722924919_tr4v6",
+      "name": "Efferalgan 500mg (Đợt 3/11/2026)",
+      "activeIngredient": "Paracetamol (Acetaminophen)",
+      "strength": "500mg",
+      "form": "Viên nén sủi bọt",
+      "unit": "viên",
+      "category": "Giảm đau - Hạ sốt",
+      "defaultDurationDays": 5,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Hòa tan hoàn toàn 1 viên trong 1 ly nước (200ml). Các lần uống cách nhau ít nhất 4 - 6 giờ.",
+      "warningNote": "Không vượt quá 4g Paracetamol/ngày. Viên sủi chứa hàm lượng muối natri cần lưu ý ở người tăng HA."
+    },
+    {
+      "id": "crawled_1793722924919_g6w46",
+      "name": "Magne-B6 Corbière (Đợt 3/11/2026)",
+      "activeIngredient": "Magnesi lactat dihydrat + Pyridoxin HCl (Vitamin B6)",
+      "strength": "470mg/5mg",
+      "form": "Viên nén bao đường",
+      "unit": "viên",
+      "category": "Vitamin & Bổ dưỡng",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối sau ăn với nhiều nước hỗ trợ giảm chuột rút, căng thẳng thần kinh.",
+      "warningNote": "Uống cách kháng sinh nhóm Tetracyclin hoặc Quinolon ít nhất 2-3 giờ."
+    },
+    {
+      "id": "crawled_1793722924919_7iptc",
+      "name": "Stugeron 25mg (Đợt 3/11/2026)",
+      "activeIngredient": "Cinnarizine",
+      "strength": "25mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tuần hoàn não",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối sau ăn điều trị rối loạn tiền đình, chóng mặt, ù tai.",
+      "warningNote": "Thuốc có thể gây buồn ngủ, tránh dùng dài ngày ở người cao tuổi có hội chứng ngoại tháp."
+    },
+    {
+      "id": "crawled_1793722924919_g0dig",
+      "name": "Myonal 50mg (Đợt 3/11/2026)",
+      "activeIngredient": "Eperisone hydrochloride",
+      "strength": "50mg",
+      "form": "Viên nén bao đường",
+      "unit": "viên",
+      "category": "Cơ xương khớp",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên x 3 lần/ngày sau bữa ăn giúp giãn cơ vân trong đau thắt lưng, cổ vai gáy.",
+      "warningNote": "Có thể gây mỏi cơ nhẹ hoặc buồn ngủ nhẹ, thận trọng khi lái xe."
+    },
+    {
+      "id": "crawled_1793722924919_0a5v4",
+      "name": "Arcoxia 60mg (Đợt 3/11/2026)",
+      "activeIngredient": "Etoricoxib",
+      "strength": "60mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Cơ xương khớp",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sau ăn sáng giảm đau kháng viêm thoái hóa khớp, viêm khớp Gout cấp.",
+      "warningNote": "Chống chỉ định trên bệnh nhân tăng huyết áp chưa kiểm soát (>140/90 mmHg)."
+    },
+    {
+      "id": "crawled_1793722924919_t0sxd",
+      "name": "Aerius 5mg (Đợt 3/11/2026)",
+      "activeIngredient": "Desloratadine",
+      "strength": "5mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDurationDays": 10,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên mỗi ngày giảm viêm mũi dị ứng và mề đay mạn tính (ít gây buồn ngủ).",
+      "warningNote": "Thận trọng giảm liều trên bệnh nhân suy thận nặng."
+    },
+    {
+      "id": "crawled_1793722924919_fsgt4",
+      "name": "Cravit 500mg (Đợt 3/11/2026)",
+      "activeIngredient": "Levofloxacin hemihydrate",
+      "strength": "500mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên mỗi ngày sau ăn sáng. Uống cách thuốc kháng acid/sắt/kẽm ít nhất 2 giờ.",
+      "warningNote": "Kháng sinh Fluoroquinolon. Chống chỉ định trẻ em <18 tuổi, phụ nữ mang thai, tiền sử viêm gân."
+    },
+    {
+      "id": "crawled_1793722924919_dbkw3",
+      "name": "Zithromax 500mg (Đợt 3/11/2026)",
+      "activeIngredient": "Azithromycin dihydrate",
+      "strength": "500mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDurationDays": 3,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên duy nhất mỗi ngày trong 3 ngày liên tiếp vào giờ cố định.",
+      "warningNote": "Kháng sinh nhóm Macrolid. Thận trọng trên bệnh nhân có khoảng QT kéo dài."
+    },
+    {
+      "id": "crawled_1793722924919_ykill",
+      "name": "Duspatalin Retard 200mg (Đợt 3/11/2026)",
+      "activeIngredient": "Mebeverine hydrochloride",
+      "strength": "200mg",
+      "form": "Viên nang cứng giải phóng kéo dài",
+      "unit": "viên",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDurationDays": 14,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối trước bữa ăn 20 phút giảm co thắt đại tràng (IBS).",
+      "warningNote": "Uống với ít nhất 100ml nước, không nhai viên nang."
+    },
+    {
+      "id": "crawled_1793722924376_5yq92",
+      "name": "Gaviscon Dual Action (Đợt 3/11/2026)",
+      "activeIngredient": "Natri alginat + Natri bicarbonat + Calci carbonat",
+      "strength": "500mg/213mg/325mg",
+      "form": "Hỗn dịch uống (Gói 10ml)",
+      "unit": "gói",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDurationDays": 10,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 gói sau các bữa ăn chính 30 phút và trước khi đi ngủ.",
+      "warningNote": "Uống cách các thuốc khác ít nhất 2 giờ để không ảnh hưởng hấp thu."
+    },
+    {
+      "id": "crawled_1793722924376_oli7l",
+      "name": "Pariet 20mg (Đợt 3/11/2026)",
+      "activeIngredient": "Rabeprazole natri",
+      "strength": "20mg",
+      "form": "Viên nén bao tan trong ruột",
+      "unit": "viên",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDurationDays": 14,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "truoc_an"
+      },
+      "defaultInstructions": "Uống 1 viên trước ăn sáng 30 phút điều trị trào ngược dạ dày thực quản (GERD).",
+      "warningNote": "Nuốt nguyên viên, không nhai hay làm vỡ lớp bao tan trong ruột."
+    },
+    {
+      "id": "crawled_1793722924376_f6m4c",
+      "name": "Betaloc ZOK 50mg (Đợt 3/11/2026)",
+      "activeIngredient": "Metoprolol succinate",
+      "strength": "50mg",
+      "form": "Viên nén phóng thích có kiểm soát",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên buổi sáng. Có thể bẻ đôi viên theo rãnh nhưng không được nhai hay nghiền.",
+      "warningNote": "Không ngưng chẹn beta đột ngột ở bệnh nhân bệnh mạch vành."
+    },
+    {
+      "id": "crawled_1793722924376_q0gtl",
+      "name": "Exforge 5mg/80mg (Đợt 3/11/2026)",
+      "activeIngredient": "Amlodipine + Valsartan",
+      "strength": "5mg/80mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên mỗi sáng. Phối hợp chẹn kênh calci và ARB kiểm soát huyết áp.",
+      "warningNote": "Theo dõi phù mắt cá chân hoặc hạ huyết áp tư thế."
+    },
+    {
+      "id": "crawled_1793722924376_3hcoj",
+      "name": "Twynsta 40/5mg (Đợt 3/11/2026)",
+      "activeIngredient": "Telmisartan + Amlodipine",
+      "strength": "40mg/5mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên buổi sáng sau ăn. Lấy thuốc ra khỏi vỉ nhôm ngay trước khi uống.",
+      "warningNote": "Thuốc hút ẩm mạnh nên phải bảo quản nguyên trong vỉ nhôm đến khi dùng."
+    },
+    {
+      "id": "crawled_1793722924376_mzgje",
+      "name": "Jardiance 25mg (Đợt 3/11/2026)",
+      "activeIngredient": "Empagliflozin",
+      "strength": "25mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên buổi sáng sau ăn. Bảo vệ tim mạch - thận ở bệnh nhân ĐTĐ típ 2.",
+      "warningNote": "Bổ sung đủ nước, theo dõi chức năng thận eGFR định kỳ."
+    },
+    {
+      "id": "crawled_1793722924376_7qdg0",
+      "name": "Plavix 75mg (Đợt 3/11/2026)",
+      "activeIngredient": "Clopidogrel bisulfate",
+      "strength": "75mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên mỗi ngày sau ăn sáng dự phòng huyết khối động mạch.",
+      "warningNote": "Ngưng thuốc ít nhất 5-7 ngày trước phẫu thuật theo chỉ định chuyên khoa."
+    },
+    {
+      "id": "crawled_1793722924376_1mhed",
+      "name": "Zinnat 500mg (Đợt 3/11/2026)",
+      "activeIngredient": "Cefuroxime axetil",
+      "strength": "500mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối ngay sau ăn để đạt độ hấp thu tối đa.",
+      "warningNote": "Cephalosporin thế hệ 2. Thận trọng dị ứng chéo với nhóm Beta-lactam."
+    },
+    {
+      "id": "crawled_1793722924376_9ye92",
+      "name": "Singulair 10mg (Đợt 3/11/2026)",
+      "activeIngredient": "Montelukast natri",
+      "strength": "10mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultInstructions": "Uống 1 viên vào buổi tối trước khi ngủ kiểm soát hen phế quản & viêm mũi dị ứng.",
+      "warningNote": "Không dùng để cắt cơn co thắt phế quản cấp."
+    },
+    {
+      "id": "crawled_1793722924376_uq7m9",
+      "name": "Medrol 16mg (Đợt 3/11/2026)",
+      "activeIngredient": "Methylprednisolone",
+      "strength": "16mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Kháng viêm - Phù nề",
+      "defaultDurationDays": 5,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên vào lúc 8:00 sáng sau ăn no theo nhịp sinh học tuyến thượng thận.",
+      "warningNote": "Chống chỉ định nhiễm nấm toàn thân. Không tự ý ngưng thuốc đột ngột khi dùng dài ngày."
+    },
+    {
+      "id": "crawled_1793722924376_l3hb1",
+      "name": "Crestor 10mg (Đợt 3/11/2026)",
+      "activeIngredient": "Rosuvastatin canxi",
+      "strength": "10mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Mỡ máu - Tim mạch",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultInstructions": "Uống 1 viên vào buổi tối trước khi đi ngủ. Kiểm tra lipid máu và men gan định kỳ.",
+      "warningNote": "Theo dõi triệu chứng đau cơ hoặc yếu cơ bất thường."
+    },
+    {
+      "id": "crawled_1793722924376_9gv96",
+      "name": "Tanakan 40mg (Đợt 3/11/2026)",
+      "activeIngredient": "Cao chuẩn hóa Ginkgo biloba (EGb 761)",
+      "strength": "40mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tuần hoàn não",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối trong bữa ăn với nửa ly nước.",
+      "warningNote": "Thận trọng khi dùng cùng thuốc chống kết tập tiểu cầu hoặc chống đông máu."
+    },
+    {
+      "id": "crawled_1793722924376_9p8fn",
+      "name": "Celebrex 200mg (Đợt 3/11/2026)",
+      "activeIngredient": "Celecoxib",
+      "strength": "200mg",
+      "form": "Viên nang cứng",
+      "unit": "viên",
+      "category": "Cơ xương khớp",
+      "defaultDurationDays": 10,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sau ăn sáng. Giảm đau kháng viêm chọn lọc COX-2.",
+      "warningNote": "Thận trọng trên bệnh nhân có bệnh mạch vành hoặc tiền sử loét tiêu hóa."
+    },
+    {
+      "id": "crawled_1793722924376_vimop",
+      "name": "Diamicron MR 60mg (Đợt 3/11/2026)",
+      "activeIngredient": "Gliclazide phóng thích biến đổi",
+      "strength": "60mg",
+      "form": "Viên nén phóng thích biến đổi",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "trong_an"
+      },
+      "defaultInstructions": "Uống 1 viên trong bữa ăn sáng. Không nhai hoặc nghiền viên.",
+      "warningNote": "Nguy cơ hạ đường huyết nếu bỏ bữa ăn sáng."
+    },
+    {
+      "id": "crawled_1793722924376_i2k8m",
+      "name": "Symbicort Turbuhaler 160/4.5mcg (Đợt 3/11/2026)",
+      "activeIngredient": "Budesonide + Formoterol fumarate",
+      "strength": "160mcg/4.5mcg",
+      "form": "Bột hít phân liều",
+      "unit": "bình",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Hít 1 nhát sáng, 1 nhát tối. Súc miệng kỹ bằng nước sạch và nhổ bỏ sau khi hít.",
+      "warningNote": "Bắt buộc súc miệng nhổ bỏ để tránh nấm candida hầu họng."
+    },
+    {
+      "id": "crawled_1793722924376_oyemy",
+      "name": "Nexium Mups 40mg (Đợt 3/11/2026)",
+      "activeIngredient": "Esomeprazole magnesium",
+      "strength": "40mg",
+      "form": "Viên nén bao tan trong ruột",
+      "unit": "viên",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDurationDays": 14,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "truoc_an"
+      },
+      "defaultInstructions": "Uống 1 viên trước bữa ăn sáng 30 - 60 phút. Nuốt nguyên viên với nước lọc.",
+      "warningNote": "Không nghiền hoặc nhai viên. Có thể hòa viên trong nước lọc không ga."
+    },
+    {
+      "id": "crawled_1793722924376_l498k",
+      "name": "Klamentin 1g (Đợt 3/11/2026)",
+      "activeIngredient": "Amoxicillin + Acid Clavulanic",
+      "strength": "875mg/125mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDurationDays": 7,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối ngay đầu bữa ăn để giảm kích ứng tiêu hóa.",
+      "warningNote": "Uống đủ liệu trình 7 ngày. Báo ngay bác sĩ nếu nổi mề đay hoặc tiêu chảy cấp."
+    },
+    {
+      "id": "crawled_1793722924376_c4kxb",
+      "name": "Co-Diovan 80/12.5mg (Đợt 3/11/2026)",
+      "activeIngredient": "Valsartan + Hydrochlorothiazide",
+      "strength": "80mg/12.5mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên vào buổi sáng lúc 8:00 sau ăn. Đo huyết áp trước khi uống.",
+      "warningNote": "Chống chỉ định cho phụ nữ có thai, hạ kali máu nặng, vô niệu."
+    },
+    {
+      "id": "crawled_1793722924376_vg1sp",
+      "name": "Forxiga 10mg (Đợt 3/11/2026)",
+      "activeIngredient": "Dapagliflozin propanediol",
+      "strength": "10mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên sau ăn sáng. Uống đủ 2 lít nước mỗi ngày.",
+      "warningNote": "Nhóm SGLT2i. Vệ sinh vùng tiết niệu phòng nhiễm nấm niệu - sinh dục."
+    },
+    {
+      "id": "crawled_1793722924376_0foyr",
+      "name": "Januvia 100mg (Đợt 3/11/2026)",
+      "activeIngredient": "Sitagliptin phosphate",
+      "strength": "100mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDurationDays": 30,
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultInstructions": "Uống 1 viên vào buổi sáng sau ăn. Kiểm tra HbA1c định kỳ 3 tháng.",
+      "warningNote": "Theo dõi viêm tụy cấp. Thận trọng trên bệnh nhân suy thận nặng."
+    },
+    {
+      "id": "exp-01",
+      "name": "Amlor (Amlodipine)",
+      "activeIngredient": "Amlodipine besylate",
+      "strength": "5mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sau khi ăn sáng vào giờ cố định",
+      "warningNote": "Hạ huyết áp chẹn kênh calci, không tự ý dừng đột ngột"
+    },
+    {
+      "id": "exp-02",
+      "name": "Coversyl (Perindopril)",
+      "activeIngredient": "Perindopril arginine",
+      "strength": "5mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "truoc_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên vào buổi sáng trước bữa ăn",
+      "warningNote": "Ức chế men chuyển (ACEI). Theo dõi ho khan khan hoặc tụt huyết áp liều đầu."
+    },
+    {
+      "id": "exp-03",
+      "name": "Cozaar (Losartan)",
+      "activeIngredient": "Losartan potassium",
+      "strength": "50mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng mỗi ngày",
+      "warningNote": "Chẹn thụ thể ARB, bảo vệ thận ở bệnh nhân tăng HA & đái tháo đường"
+    },
+    {
+      "id": "exp-04",
+      "name": "Concor (Bisoprolol)",
+      "activeIngredient": "Bisoprolol fumarate",
+      "strength": "2.5mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên vào buổi sáng sau ăn",
+      "warningNote": "Chẹn beta, kiểm soát nhịp tim. Chống chỉ định hen phế quản nặng, nhịp tim chậm <50."
+    },
+    {
+      "id": "exp-05",
+      "name": "Micardis (Telmisartan)",
+      "activeIngredient": "Telmisartan",
+      "strength": "40mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng",
+      "warningNote": "Hạ huyết áp tác dụng kéo dài 24h, bảo vệ tim mạch."
+    },
+    {
+      "id": "exp-06",
+      "name": "Natrilix SR (Indapamide)",
+      "activeIngredient": "Indapamide phóng thích chậm",
+      "strength": "1.5mg",
+      "form": "Viên nén phóng thích chậm",
+      "unit": "viên",
+      "category": "Tim mạch - Huyết áp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên duy nhất vào buổi sáng",
+      "warningNote": "Lợi tiểu hạ huyết áp nhẹ, uống nguyên viên không bẻ"
+    },
+    {
+      "id": "exp-07",
+      "name": "Lipitor (Atorvastatin)",
+      "activeIngredient": "Atorvastatin calcium",
+      "strength": "20mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Mỡ máu - Tim mạch",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên buổi tối trước khi đi ngủ (lúc 20:30)",
+      "warningNote": "Hạ cholesterol máu LDL-C, bảo vệ mạch vành. Báo ngay nếu đau cơ bất thường."
+    },
+    {
+      "id": "exp-08",
+      "name": "Crestor (Rosuvastatin)",
+      "activeIngredient": "Rosuvastatin calcium",
+      "strength": "10mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Mỡ máu - Tim mạch",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên buổi tối sau ăn hoặc trước khi ngủ",
+      "warningNote": "Statin thế hệ mới kiểm soát mỡ máu mạnh mẽ."
+    },
+    {
+      "id": "exp-09",
+      "name": "Lipanthyl (Fenofibrate)",
+      "activeIngredient": "Fenofibrate",
+      "strength": "145mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Mỡ máu - Tim mạch",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên trong bữa ăn tối",
+      "warningNote": "Đặc trị tăng triglyceride máu, ngừa viêm tụy cấp."
+    },
+    {
+      "id": "exp-10",
+      "name": "Aspirin pH8",
+      "activeIngredient": "Acid acetylsalicylic",
+      "strength": "81mg",
+      "form": "Viên bao tan trong ruột",
+      "unit": "viên",
+      "category": "Tim mạch - Chống đông",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sau ăn cơm trưa no với 1 ly nước đầy",
+      "warningNote": "Kháng kết tập tiểu cầu ngừa đột quỵ, nhồi máu cơ tim. Không bẻ viên."
+    },
+    {
+      "id": "exp-12",
+      "name": "Glucophage (Metformin)",
+      "activeIngredient": "Metformin HCl",
+      "strength": "500mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên trong hoặc ngay sau bữa ăn sáng và tối",
+      "warningNote": "Hạ đường huyết đầu tay. Uống trong bữa ăn để giảm tác dụng phụ cồn cào ruột."
+    },
+    {
+      "id": "exp-13",
+      "name": "Diamicron MR (Gliclazide)",
+      "activeIngredient": "Gliclazide giải phóng biến đổi",
+      "strength": "30mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "truoc_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên trước bữa ăn sáng 15 phút",
+      "warningNote": "Kích thích tụy tiết insulin. Chú ý nguy cơ hạ đường huyết nếu bỏ bữa."
+    },
+    {
+      "id": "exp-14",
+      "name": "Januvia (Sitagliptin)",
+      "activeIngredient": "Sitagliptin phosphate",
+      "strength": "50mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên vào buổi sáng cùng hoặc không cùng thức ăn",
+      "warningNote": "Ức chế DPP-4 hạ đường huyết an toàn, ít nguy cơ hạ đường huyết quá mức."
+    },
+    {
+      "id": "exp-15",
+      "name": "Forxiga (Dapagliflozin)",
+      "activeIngredient": "Dapagliflozin",
+      "strength": "10mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Đái tháo đường",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên buổi sáng, uống nhiều nước trong ngày",
+      "warningNote": "Ức chế SGLT-2, thải đường qua nước tiểu, bảo vệ tim và thận."
+    },
+    {
+      "id": "exp-18",
+      "name": "Phosphalugel (Gel chữ P)",
+      "activeIngredient": "Nhôm phosphat colloidal",
+      "strength": "20g",
+      "form": "Gói hỗn dịch",
+      "unit": "gói",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 10,
+      "defaultInstructions": "Uống 1 gói sau bữa ăn 1-2 giờ hoặc khi đang có cơn đau rát thượng vị",
+      "warningNote": "Kháng acid, tráng bảo vệ niêm mạc dạ dày"
+    },
+    {
+      "id": "exp-19",
+      "name": "Motilium-M (Domperidone)",
+      "activeIngredient": "Domperidone",
+      "strength": "10mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Uống 1 viên trước mỗi bữa ăn 15-30 phút",
+      "warningNote": "Trị chứng buồn nôn, đầy hơi, chậm tiêu hóa thức ăn"
+    },
+    {
+      "id": "exp-20",
+      "name": "Debridat (Trimebutine)",
+      "activeIngredient": "Trimebutine maleate",
+      "strength": "100mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_an"
+      },
+      "defaultDurationDays": 14,
+      "defaultInstructions": "Uống 1 viên trước bữa ăn sáng, trưa, tối",
+      "warningNote": "Điều hòa nhu động ruột, giảm co thắt trong hội chứng ruột kích thích (IBS)."
+    },
+    {
+      "id": "exp-21",
+      "name": "Bioflora (Saccharomyces boulardii)",
+      "activeIngredient": "Men vi sinh nấm men",
+      "strength": "250mg",
+      "form": "Gói bột uống",
+      "unit": "gói",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Hòa tan 1 gói với nước ấm hoặc sữa, uống sáng và tối",
+      "warningNote": "Phục hồi hệ vi sinh đường ruột khi dùng kháng sinh hoặc tiêu chảy cấp."
+    },
+    {
+      "id": "exp-22",
+      "name": "Hepa-Merz (L-Ornithine L-Aspartate)",
+      "activeIngredient": "L-Ornithine L-Aspartate",
+      "strength": "5g",
+      "form": "Gói cốm",
+      "unit": "gói",
+      "category": "Dạ dày - Tiêu hóa",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 14,
+      "defaultInstructions": "Hòa tan gói thuốc trong 1 cốc nước, uống sau ăn sáng và tối",
+      "warningNote": "Tăng cường chức năng thải độc gan, hạ men gan và amoniac."
+    },
+    {
+      "id": "exp-23",
+      "name": "Klacid (Clarithromycin)",
+      "activeIngredient": "Clarithromycin",
+      "strength": "500mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng và 1 viên sau ăn tối. Uống liên tục 7 ngày.",
+      "warningNote": "Kháng sinh Macrolide trị viêm phế quản, viêm xoang, vi khuẩn HP dạ dày."
+    },
+    {
+      "id": "exp-24",
+      "name": "Augmentin (Amoxicillin/Clavulanate)",
+      "activeIngredient": "Amoxicillin 875mg + Acid Clavulanic 125mg",
+      "strength": "1g",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "trong_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Uống 1 viên vào đầu bữa ăn sáng và tối. Uống đủ 7 ngày.",
+      "warningNote": "Kháng sinh phổ rộng trị viêm họng, viêm xoang, viêm tai giữa, hô hấp."
+    },
+    {
+      "id": "exp-25",
+      "name": "Cefixime",
+      "activeIngredient": "Cefixime trihydrate",
+      "strength": "200mg",
+      "form": "Viên nang",
+      "unit": "viên",
+      "category": "Kháng sinh",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng và 1 viên sau ăn tối",
+      "warningNote": "Cephalosporin thế hệ 3, trị nhiễm khuẩn hô hấp, tiết niệu."
+    },
+    {
+      "id": "exp-28",
+      "name": "Acemuc (Acetylcystein)",
+      "activeIngredient": "Acetylcystein",
+      "strength": "200mg",
+      "form": "Gói cốm pha dung dịch",
+      "unit": "gói",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Hòa tan gói thuốc trong 1/2 cốc nước, uống sáng, trưa, tối",
+      "warningNote": "Làm loãng đờm đặc trong viêm phế quản, viêm phổi."
+    },
+    {
+      "id": "exp-29",
+      "name": "Telfast (Fexofenadine)",
+      "activeIngredient": "Fexofenadine hydrochloride",
+      "strength": "180mg",
+      "form": "Viên nén bao phim",
+      "unit": "viên",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 10,
+      "defaultInstructions": "Uống 1 viên vào buổi sáng sau ăn",
+      "warningNote": "Kháng histamin thế hệ 2 không gây buồn ngủ, trị viêm mũi dị ứng, mày đay."
+    },
+    {
+      "id": "exp-30",
+      "name": "Zyrtec (Cetirizine)",
+      "activeIngredient": "Cetirizine dihydrochloride",
+      "strength": "10mg",
+      "form": "Viên bao phim",
+      "unit": "viên",
+      "category": "Hô hấp - Tai mũi họng",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultDurationDays": 7,
+      "defaultInstructions": "Uống 1 viên vào buổi tối trước khi ngủ",
+      "warningNote": "Chống dị ứng, ngứa mũi, hắt hơi liên tục."
+    },
+    {
+      "id": "exp-31",
+      "name": "Panadol Extra",
+      "activeIngredient": "Paracetamol 500mg + Caffeine 65mg",
+      "strength": "500mg/65mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Giảm đau - Hạ sốt",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 1,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 5,
+      "defaultInstructions": "Uống 1 viên khi sốt trên 38.5 độ hoặc đau nhức, cách nhau tối thiểu 4-6 giờ",
+      "warningNote": "Không dùng quá 6 viên/ngày. Thận trọng bệnh gan."
+    },
+    {
+      "id": "exp-33",
+      "name": "Mobic (Meloxicam)",
+      "activeIngredient": "Meloxicam",
+      "strength": "7.5mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Cơ xương khớp",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 10,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng và tối",
+      "warningNote": "Kháng viêm giảm đau khớp NSAID. Nên dùng kèm thuốc bảo vệ dạ dày nếu đau bao tử."
+    },
+    {
+      "id": "exp-36",
+      "name": "Tanakan (Ginkgo Biloba)",
+      "activeIngredient": "Cao lá bạch quả tiêu chuẩn (EGb 761)",
+      "strength": "40mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tuần hoàn não",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối sau bữa ăn",
+      "warningNote": "Tăng tuần hoàn máu não, cải thiện trí nhớ, giảm hoa mắt chóng mặt."
+    },
+    {
+      "id": "exp-37",
+      "name": "Nootropil (Piracetam)",
+      "activeIngredient": "Piracetam",
+      "strength": "800mg",
+      "form": "Viên bao phim",
+      "unit": "viên",
+      "category": "Tuần hoàn não",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng và 1 viên sau ăn tối",
+      "warningNote": "Bổ não, hỗ trợ phục hồi sau tai biến mạch máu não và sa sút trí tuệ."
+    },
+    {
+      "id": "exp-40",
+      "name": "Rotunda (Rotundin)",
+      "activeIngredient": "Rotundin thảo dược",
+      "strength": "30mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Tuần hoàn não",
+      "defaultDosage": {
+        "morning": 0,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "truoc_ngu"
+      },
+      "defaultDurationDays": 14,
+      "defaultInstructions": "Uống 1-2 viên trước khi đi ngủ 30-60 phút",
+      "warningNote": "An thần thảo dược củ bình vôi, giúp dễ ngủ tự nhiên, an toàn cho người lớn tuổi."
+    },
+    {
+      "id": "exp-41",
+      "name": "Vitamin 3B (B1, B6, B12)",
+      "activeIngredient": "Thiamine, Pyridoxine, Cyanocobalamin",
+      "strength": "Chuẩn",
+      "form": "Viên nang mềm",
+      "unit": "viên",
+      "category": "Vitamin & Bổ dưỡng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 1,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 20,
+      "defaultInstructions": "Uống 1 viên sáng, 1 viên tối sau bữa ăn",
+      "warningNote": "Bổ thần kinh, hỗ trợ giảm tê bì đầu chi, đau thần kinh tọa."
+    },
+    {
+      "id": "exp-42",
+      "name": "Calci D3 Nano",
+      "activeIngredient": "Calci nano 500mg + Vitamin D3 200IU",
+      "strength": "500mg/200IU",
+      "form": "Viên nang mềm",
+      "unit": "viên",
+      "category": "Vitamin & Bổ dưỡng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 30,
+      "defaultInstructions": "Uống 1 viên vào buổi sáng sau bữa ăn no, uống nhiều nước",
+      "warningNote": "Bổ sung calci phòng ngừa loãng xương. Không uống vào buổi tối."
+    },
+    {
+      "id": "exp-43",
+      "name": "Canxi Corbière 10ml",
+      "activeIngredient": "Calci glucoheptonat 1.1g + Vitamin C 100mg + Vitamin PP 50mg",
+      "strength": "10ml",
+      "form": "Ống uống",
+      "unit": "ống",
+      "category": "Vitamin & Bổ dưỡng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 20,
+      "defaultInstructions": "Bẻ ống uống trực tiếp vào buổi sáng sau ăn",
+      "warningNote": "Canxi hữu cơ dễ hấp thu, không gây táo bón hay sỏi thận."
+    },
+    {
+      "id": "exp-44",
+      "name": "Farzincol (Kẽm Gluconate)",
+      "activeIngredient": "Kẽm gluconat tương đương 10mg kẽm nguyên tố",
+      "strength": "10mg",
+      "form": "Viên nén",
+      "unit": "viên",
+      "category": "Vitamin & Bổ dưỡng",
+      "defaultDosage": {
+        "morning": 1,
+        "noon": 0,
+        "afternoon": 0,
+        "evening": 0,
+        "timing": "sau_an"
+      },
+      "defaultDurationDays": 14,
+      "defaultInstructions": "Uống 1 viên sau ăn sáng",
+      "warningNote": "Tăng cường đề kháng, hỗ trợ niêm mạc đường tiêu hóa và da."
+    }
+  ],
+  "updatedAt": "2026-11-04T03:35:57.054Z"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Phòng Khám BS. Trần Văn Diệu - Quản Lý Khám Bệnh & In Toa Thuốc",
+  "description": "Phần mềm phòng khám của Bác sĩ Trần Văn Diệu: quản lý hồ sơ bệnh nhân, khám bệnh, kê đơn và in toa thuốc kèm lịch nhắc uống thuốc định kỳ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

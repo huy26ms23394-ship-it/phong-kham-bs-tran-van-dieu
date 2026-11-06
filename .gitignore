@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build outputs
+dist/
+build/
+coverage/
+
+# Environment Variables & Secrets
+.env*
+!.env.example
+
+# Vercel & Deployments
+.vercel/
+
+# Sensitive Medical Audit Logs & Local Runtime Caches
+server_data/audit_logs.jsonl
+server_data/crawler_store.json
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

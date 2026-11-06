@@ -1,0 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --color-primary: #047857;
+  --color-accent: #16a34a;
+  --color-background: #edf2f0;
+  --color-foreground: #0f172a;
+  --color-card: #f8faf9;
+  --color-border: #cbd5e1;
+  --color-destructive: #dc2626;
+  --space-xs: 0.125rem;
+  --space-sm: 0.25rem;
+  --space-md: 0.5rem;
+  --space-lg: 0.75rem;
+  --space-xl: 1rem;
+  --space-2xl: 1.5rem;
+}
+
+@layer base {
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    color-scheme: light dark;
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    letter-spacing: -0.011em;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    overflow-x: hidden;
+    @apply antialiased text-slate-800 bg-[#edf2f0] min-h-dvh selection:bg-emerald-100 selection:text-emerald-900 transition-colors duration-200;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  html.dark body {
+    @apply text-slate-100 bg-[#0b0f17] selection:bg-emerald-900 selection:text-emerald-100;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  button, a, [role="button"], [role="tab"], select, summary {
+    cursor: pointer;
+  }
+}
+
+/* ==========================================================================
+   CHẾ ĐỘ SÁNG BẢO VỆ MẮT (EYE-CARE / ANTI-GLARE MEDICAL LIGHT MODE)
+   Hạ màu trắng tinh (#ffffff) xuống 2-3 tông kem ngọc êm dịu (#f8faf9)
+   để chống mỏi mắt cho Bác sĩ khi làm việc liên tục cả ngày.
+   ========================================================================== */
+@media screen {
+  html:not(.dark) {
+    background-color: #edf2f0;
+    color: #1e293b;
+  }
+
+  html:not(.dark) body {
+    background-color: #edf2f0 !important;
+    color: #1e293b;
+  }
+
+  /* Khung Card, Form, Container: chuyển từ trắng tinh chói mắt sang trắng ngọc dịu mắt */
+  html:not(.dark) .bg-white {
+    background-color: #f8faf9 !important;
+  }
+
+  /* Nền trang và phân cách chuyển sang tone xám ngọc y tế êm dịu */
+  html:not(.dark) .bg-slate-50 {
+    background-color: #edf2f0 !important;
+  }
+
+  html:not(.dark) .bg-slate-100 {
+    background-color: #e2e8e5 !important;
+  }
+
+  /* Input, Select, Textarea: dịu mắt, tránh phản quang */
+  html:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+  html:not(.dark) select,
+  html:not(.dark) textarea {
+    background-color: #fbfcfb;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   SCROLLBAR SYSTEM
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+html.dark * {
+  scrollbar-color: #334155 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+.scrollbar-none,
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+html.dark .custom-scrollbar {
+  scrollbar-color: #334155 transparent;
+}
+
+.font-times {
+  font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+}
+
+/* ==========================================================================
+   PRINT CSS - KHỔ A5 CHUẨN Y TẾ VIỆT NAM (148mm x 210mm)
+   Loại bỏ 100% background của trang web, nền giấy trắng tinh khiết mực đen,
+   vừa khít 1 trang A5 duy nhất (1 sheet of paper), không bị tràn trang.
+   ========================================================================== */
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 4mm 5mm;
+  }
+
+  /* Ẩn triệt để tất cả các thành phần giao diện không liên quan */
+  .no-print,
+  nav,
+  header,
+  footer,
+  button,
+  input,
+  select,
+  textarea,
+  .print-hidden,
+  .fixed,
+  aside,
+  [role="dialog"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Xóa sạch mọi màu nền của body và toàn bộ container cha */
+  html,
+  body,
+  #root,
+  #root > div,
+  main,
+  div {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-scheme: light !important;
+  }
+
+  .print-sheet,
+  .print-sheet *,
+  .prescription-print-sheet,
+  .prescription-print-sheet * {
+    font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+  }
+
+  /* Toa thuốc in: Không padding thừa, không viền ngoài, vừa khít khổ giấy A5 */
+  .print-sheet,
+  .prescription-print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    display: block !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Định dạng chuyên biệt khổ A5 (138mm rộng, tối đa 200mm cao để trọn 1 trang) */
+  .prescription-a5-sheet {
+    width: 138mm !important;
+    max-width: 138mm !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    font-size: 8pt !important;
+    line-height: 1.25 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Chỉ ngắt trang khi có nhiều tờ (khi bác sĩ chọn in kèm bảng dán tủ lạnh) */
+  .print-sheet:not(:last-child),
+  .page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* Tránh ngắt dòng trong hàng của bảng thuốc */
+  tr, .print-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
