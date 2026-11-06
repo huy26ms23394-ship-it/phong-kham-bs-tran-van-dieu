@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { dbService } from './databaseService.js';
 
 // Secret key for signing tokens
 const JWT_SECRET = process.env.JWT_SECRET || 'bs-tran-van-dieu-zero-trust-clinical-secret-2026';
@@ -92,9 +93,34 @@ export function verifyToken(token: string): TokenPayload | null {
 }
 
 /**
- * Verify Master Admin credentials
+ * Hash password using PBKDF2 with a 16-byte cryptographically secure salt
  */
-export function verifyMasterAdmin(emailOrUser: string, pass: string): boolean {
+export function hashPasswordWithSalt(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+/**
+ * Verify password against salt:hash
+ */
+export function verifyPasswordWithSalt(password: string, storedHash: string): boolean {
+  try {
+    const [salt, key] = storedHash.split(':');
+    if (!salt || !key) return false;
+    const computed = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(key, 'hex'), Buffer.from(computed, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify Master Admin credentials:
+ * 1. Ưu tiên kiểm tra mật khẩu đã đổi trong Supabase (password_hash)
+ * 2. Nếu chưa từng đổi, fallback về biến môi trường ADMIN_INITIAL_PASSWORD
+ */
+export async function verifyMasterAdmin(emailOrUser: string, pass: string): Promise<boolean> {
   const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
   const inputUser = emailOrUser.toLowerCase().trim();
 
@@ -102,14 +128,27 @@ export function verifyMasterAdmin(emailOrUser: string, pass: string): boolean {
   const isMatchUser = inputUser === adminEmail || inputUser === 'admin' || inputUser === 'bstranvandieu';
   if (!isMatchUser) return false;
 
-  const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'DieuClinic@2026!';
-  const customHash = process.env.ADMIN_PASSWORD_HASH;
-
-  if (customHash) {
-    const computedHash = crypto.createHash('sha256').update(pass).digest('hex');
-    if (computedHash === customHash) return true;
+  // 1. Kiểm tra mật khẩu đã đổi trong database Supabase
+  try {
+    const customHash = await dbService.getAdminPasswordHash();
+    if (customHash) {
+      return verifyPasswordWithSalt(pass, customHash);
+    }
+  } catch (err) {
+    console.warn('[AuthService] Lỗi đọc admin password hash từ DB, fallback env:', err);
   }
 
-  // Fallback to initial password
+  // 2. Fallback nếu có ADMIN_PASSWORD_HASH trong env
+  const envHash = process.env.ADMIN_PASSWORD_HASH;
+  if (envHash) {
+    if (envHash.includes(':')) {
+      return verifyPasswordWithSalt(pass, envHash);
+    }
+    const computedHash = crypto.createHash('sha256').update(pass).digest('hex');
+    if (computedHash === envHash) return true;
+  }
+
+  // 3. Fallback về mật khẩu khởi tạo ban đầu
+  const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'DieuClinic@2026!';
   return pass === initialPassword || pass === 'DieuClinic@2026!';
 }

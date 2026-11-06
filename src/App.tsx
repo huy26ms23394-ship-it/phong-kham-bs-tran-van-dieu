@@ -38,6 +38,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginModal } from './components/LoginModal';
 import { PendingApprovalScreen } from './components/PendingApprovalScreen';
 import { UserApprovalModal } from './components/UserApprovalModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { ClinicUser } from './types/auth';
 import {
   getStoredToken,
@@ -61,6 +62,7 @@ import {
   BookOpen,
   Scale,
   Smartphone,
+  Lock,
 } from 'lucide-react';
 
 interface GoogleUser {
@@ -227,6 +229,7 @@ export default function App() {
   // Zero-Trust Authentication State
   const [authUser, setAuthUser] = useState<ClinicUser | null>(() => getStoredUser());
   const [isUserApprovalModalOpen, setIsUserApprovalModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
 
   // Validate session on app launch
@@ -817,6 +820,7 @@ export default function App() {
           currentUser={authUser}
           pendingUsersCount={pendingUsersCount}
           onOpenUserApprovalModal={() => setIsUserApprovalModalOpen(true)}
+          onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
           onGoogleLogin={() => {}}
           onGoogleLogout={() => {
             clearSession();
@@ -824,8 +828,8 @@ export default function App() {
           }}
         />
 
-        {/* Main Content Area */}
-        <main className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4 pb-24 md:pb-12">
+        {/* Main Content Area: Widescreen Fluid Layout Max-W-[1840px] */}
+        <main className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 py-4 sm:py-6 pb-24 md:pb-12">
           {activeTab === 'consultation' && (
             <ConsultationForm
               patients={patients}
@@ -907,25 +911,38 @@ export default function App() {
         className="hidden"
       />
 
-      {/* Footer (No print) */}
-      <footer className="no-print mt-8 pb-20 lg:pb-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f141f] py-4 text-slate-500 dark:text-slate-400 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-center md:text-left">
-            <ShieldCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
-            <span>
-              <strong className="text-slate-700 dark:text-slate-200">{clinicInfo.clinicName}</strong> · {clinicInfo.doctorTitle} {clinicInfo.doctorName} · CCHN: {clinicInfo.practicingCertificate || clinicInfo.licenseNumber}
+      {/* Expanded Widescreen Footer (No print) */}
+      <footer className="no-print mt-12 pb-24 lg:pb-8 border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0b0f17] py-6 text-slate-500 dark:text-slate-400 text-xs transition-colors">
+        <div className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 flex flex-col xl:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm">
+                {clinicInfo?.clinicName || 'Phòng Khám Nội Tổng Quát BS. Trần Văn Diệu'}
+              </strong>
+            </div>
+            <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
+            <span className="font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/80 dark:border-emerald-800 font-bold text-[11px]">
+              CCHN: {clinicInfo?.licenseNumber || '00362/SYT-GPHĐ'}
+            </span>
+            <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
+            <span className="text-[11px] text-slate-600 dark:text-slate-400">
+              Hệ thống Quản lý Y tế Zero-Trust tuân thủ Nghị định 333/2026/NĐ-CP
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-2">
             <span
-              className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5 text-xs bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800"
-              title="Đồng bộ tự động qua Cloud Database"
+              className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-2 text-xs bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-800 shadow-2xs"
+              title="Đồng bộ tự động thời gian thực qua Cloud Supabase"
             >
-              <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: '6s' }} />
-              <span>Đồng bộ Cloud: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('vi-VN') : 'Sẵn sàng'}</span>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>Cloud Supabase Realtime: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('vi-VN') : 'Sẵn sàng 24/7'}</span>
             </span>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={() => setIsLegalModalOpen(true)}
               className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -934,7 +951,7 @@ export default function App() {
               <Scale className="w-3.5 h-3.5" />
               <span>Pháp lý Y tế (VN &amp; Quốc tế)</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={() => setIsShortcutsModalOpen(true)}
               className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -943,7 +960,7 @@ export default function App() {
               <Keyboard className="w-3.5 h-3.5" />
               <span>Phím tắt (?)</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={() => setIsUserGuideModalOpen(true)}
               className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -952,7 +969,7 @@ export default function App() {
               <BookOpen className="w-3.5 h-3.5" />
               <span>Hướng dẫn</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={handleExportBackup}
               className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -961,7 +978,7 @@ export default function App() {
               <Download className="w-3.5 h-3.5" />
               <span>Sao lưu (JSON)</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={() => backupFileInputRef.current?.click()}
               className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -970,7 +987,7 @@ export default function App() {
               <Upload className="w-3.5 h-3.5" />
               <span>Nạp file JSON</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
               onClick={handleResetDemoData}
               className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
@@ -1110,6 +1127,13 @@ export default function App() {
         isOpen={isUserApprovalModalOpen}
         onClose={() => setIsUserApprovalModalOpen(false)}
         onUsersUpdated={refreshPendingUsers}
+        onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
+      />
+
+      {/* Đổi Mật Khẩu Quản Trị Viên Master Admin */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
       />
 
       {/* Kế hoạch 2: Màn Hình Khóa PIN Bảo Mật Cục Bộ (iOS/LAN) */}

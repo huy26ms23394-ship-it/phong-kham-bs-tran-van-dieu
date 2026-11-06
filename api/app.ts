@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { crawlerService } from './crawlerService.js';
 import { dbService } from './databaseService.js';
-import { signToken, verifyToken, verifyMasterAdmin } from './authService.js';
+import { signToken, verifyToken, verifyMasterAdmin, hashPasswordWithSalt } from './authService.js';
 
 dotenv.config();
 
@@ -138,7 +138,7 @@ apiRouter.post('/auth/login-admin', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Thiếu tài khoản hoặc mật khẩu quản trị' });
     }
 
-    const isValid = verifyMasterAdmin(emailOrUsername, password);
+    const isValid = await verifyMasterAdmin(emailOrUsername, password);
     if (!isValid) {
       await dbService.recordAuditLog({
         action: 'ADMIN_LOGIN_FAILED',
@@ -417,6 +417,55 @@ apiRouter.delete('/auth/user', authMiddleware, adminOnlyMiddleware, async (req, 
     });
 
     return res.json({ success: true });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// 8. Đổi mật khẩu Quản Trị Viên Master Admin
+apiRouter.post('/auth/change-password', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const adminUser = (req as any).user;
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới' });
+    }
+
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có tối thiểu 8 ký tự' });
+    }
+
+    // Xác thực mật khẩu hiện tại
+    const isCurrentValid = await verifyMasterAdmin(adminUser.email, currentPassword);
+    if (!isCurrentValid) {
+      await dbService.recordAuditLog({
+        action: 'ADMIN_PASSWORD_CHANGE_FAILED',
+        ip: clientIp,
+        status: 'FAILURE',
+        userAgent: req.headers['user-agent'],
+        details: { email: adminUser.email, reason: 'INVALID_CURRENT_PASSWORD' },
+      });
+      return res.status(401).json({ success: false, error: 'Mật khẩu hiện tại không chính xác' });
+    }
+
+    // Mã hóa mật khẩu mới với salt + PBKDF2 (SHA-512)
+    const newHash = hashPasswordWithSalt(String(newPassword));
+    await dbService.setAdminPasswordHash(newHash);
+
+    await dbService.recordAuditLog({
+      action: 'ADMIN_PASSWORD_CHANGED',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: { email: adminUser.email, changedBy: adminUser.email },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Đổi mật khẩu quản trị viên thành công. Mật khẩu mới đã được lưu an toàn lên hệ thống đám mây Supabase.',
+    });
   } catch (err: unknown) {
     return res.status(500).json({ success: false, error: (err as Error).message });
   }
@@ -752,7 +801,6 @@ apiRouter.get('/clinic/sync', authMiddleware, async (req, res) => {
       ip: clientIp,
       status: 'SUCCESS',
       userAgent: req.headers['user-agent'],
-      userEmail: authUser?.email,
       details: {
         user: authUser?.email,
         role: authUser?.role,
@@ -778,7 +826,6 @@ apiRouter.post('/clinic/sync', authMiddleware, async (req, res) => {
       ip: clientIp,
       status: 'SUCCESS',
       userAgent: req.headers['user-agent'],
-      userEmail: authUser?.email,
       details: {
         user: authUser?.email,
         role: authUser?.role,

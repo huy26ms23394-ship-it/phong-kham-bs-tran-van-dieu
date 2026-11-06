@@ -7,6 +7,7 @@ import {
   ExternalLink,
   ChevronDown,
   X,
+  KeyRound,
 } from 'lucide-react';
 
 export interface GoogleUser {
@@ -22,6 +23,7 @@ interface GoogleAuthBarProps {
   onLogin: (user: GoogleUser) => void;
   onLogout: () => void;
   onOpenGmailInbox?: () => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const GoogleAuthBar: React.FC<GoogleAuthBarProps> = ({
@@ -29,6 +31,7 @@ export const GoogleAuthBar: React.FC<GoogleAuthBarProps> = ({
   onLogin,
   onLogout,
   onOpenGmailInbox,
+  onOpenChangePassword,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -60,7 +63,7 @@ export const GoogleAuthBar: React.FC<GoogleAuthBarProps> = ({
   };
 
   // Compact short name for navbar pill (e.g. "Bác Sĩ Trần Văn Diệu" -> "BS. Diệu")
-  const shortDoctorName = (currentUser?.name || 'BS. Trần Văn Diệu')
+  const shortDoctorName = String(currentUser?.name || 'BS. Trần Văn Diệu')
     .replace(/^Bác Sĩ\s+/i, 'BS. ')
     .replace(/^BS\.\s+Trần Văn\s+/i, 'BS. ');
 
@@ -157,6 +160,22 @@ export const GoogleAuthBar: React.FC<GoogleAuthBarProps> = ({
                   <span>Mở Gmail trực tuyến</span>
                   <ExternalLink className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
                 </a>
+
+                {onOpenChangePassword && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onOpenChangePassword();
+                    }}
+                    className="w-full h-9 px-3 py-1.5 rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-left font-medium flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                      <span>Đổi mật khẩu Admin</span>
+                    </div>
+                  </button>
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">

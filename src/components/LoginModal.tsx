@@ -10,6 +10,8 @@ import {
   Sparkles,
   ArrowRight,
   ShieldAlert,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { loginAdmin, loginGoogle } from '../utils/authClient';
 import { ClinicUser } from '../types/auth';
@@ -25,9 +27,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 }) => {
   const [tab, setTab] = useState<'google' | 'admin'>('google');
 
-  // Master Admin form state
-  const [adminUser, setAdminUser] = useState('tranminhhuy3031998@gmail.com');
-  const [adminPass, setAdminPass] = useState('DieuClinic@2026!');
+  // Master Admin form state (Không điền sẵn mật khẩu hoặc email vì lý do an ninh)
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPass, setAdminPass] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
 
@@ -297,9 +300,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     type="text"
                     value={adminUser}
                     onChange={(e) => setAdminUser(e.target.value)}
-                    placeholder="tranminhhuy3031998@gmail.com"
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Nhập email hoặc tên đăng nhập quản trị..."
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -311,17 +315,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="password"
+                    type={showAdminPass ? 'text' : 'password'}
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     required
+                    autoComplete="current-password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPass(!showAdminPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1"
+                    title={showAdminPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    aria-label={showAdminPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  >
+                    {showAdminPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Mật khẩu mặc định khởi tạo: <code className="font-bold text-emerald-700 dark:text-emerald-400">DieuClinic@2026!</code>
-                </p>
               </div>
 
               {adminError && (

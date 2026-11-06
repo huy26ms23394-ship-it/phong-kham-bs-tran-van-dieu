@@ -55,6 +55,7 @@ export class DatabaseService {
   private readonly supabaseUrl?: string;
   private readonly supabaseKey?: string;
   private localUsers: Map<string, AuthorizedUser> = new Map();
+  private localAdminPasswordHash: string | null = null;
 
   private constructor() {
     this.dataDir = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
@@ -167,8 +168,10 @@ export class DatabaseService {
           status TEXT DEFAULT 'PENDING',
           requested_at TIMESTAMPTZ DEFAULT NOW(),
           approved_by TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          password_hash TEXT
         );
+        ALTER TABLE authorized_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
       `);
 
       const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
@@ -702,6 +705,93 @@ export class DatabaseService {
       }
     }
     this.localUsers.delete(email);
+    return true;
+  }
+
+  /**
+   * Lấy mã hash mật khẩu quản trị viên Master Admin từ Supabase / Postgres
+   */
+  public async getAdminPasswordHash(): Promise<string | null> {
+    const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        const res = await this.pgPool.query(
+          `SELECT password_hash FROM authorized_users WHERE LOWER(email) = $1 LIMIT 1`,
+          [adminEmail]
+        );
+        if (res.rows[0]?.password_hash) {
+          return res.rows[0].password_hash;
+        }
+      } catch (err) {
+        console.warn('[DatabaseService] Lỗi đọc password_hash PG:', err);
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const res = await fetch(
+          `${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(adminEmail)}&select=password_hash`,
+          {
+            headers: {
+              apikey: this.supabaseKey,
+              Authorization: `Bearer ${this.supabaseKey}`,
+            },
+          }
+        );
+        if (res.ok) {
+          const list = await res.json();
+          if (list[0]?.password_hash) {
+            return list[0].password_hash;
+          }
+        }
+      } catch (err) {
+        console.warn('[DatabaseService] Lỗi đọc password_hash Supabase:', err);
+      }
+    }
+
+    return this.localAdminPasswordHash;
+  }
+
+  /**
+   * Cập nhật mật khẩu mới cho Master Admin lên Supabase / Postgres
+   */
+  public async setAdminPasswordHash(hash: string): Promise<boolean> {
+    const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
+    this.localAdminPasswordHash = hash;
+
+    if (this.pgPool) {
+      try {
+        await this.ensureCloudTables();
+        await this.pgPool.query(
+          `UPDATE authorized_users SET password_hash = $1, updated_at = NOW() WHERE LOWER(email) = $2`,
+          [hash, adminEmail]
+        );
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi lưu password_hash PG:', err);
+      }
+    }
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        await fetch(
+          `${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(adminEmail)}`,
+          {
+            method: 'PATCH',
+            headers: {
+              apikey: this.supabaseKey,
+              Authorization: `Bearer ${this.supabaseKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            },
+            body: JSON.stringify({ password_hash: hash, updated_at: new Date().toISOString() }),
+          }
+        );
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi lưu password_hash Supabase:', err);
+      }
+    }
+
     return true;
   }
 

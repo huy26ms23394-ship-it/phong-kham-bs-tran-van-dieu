@@ -13,6 +13,7 @@ import {
   Ban,
   Mail,
   HeartHandshake,
+  KeyRound,
 } from 'lucide-react';
 import { ClinicUser, UserRole, UserStatus } from '../types/auth';
 import {
@@ -26,12 +27,14 @@ interface UserApprovalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUsersUpdated?: () => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const UserApprovalModal: React.FC<UserApprovalModalProps> = ({
   isOpen,
   onClose,
   onUsersUpdated,
+  onOpenChangePassword,
 }) => {
   const [tab, setTab] = useState<'pending' | 'approved' | 'preapprove'>('pending');
   const [users, setUsers] = useState<ClinicUser[]>([]);
@@ -170,13 +173,29 @@ export const UserApprovalModal: React.FC<UserApprovalModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenChangePassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenChangePassword();
+                }}
+                className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                title="Đổi mật khẩu tài khoản Master Admin"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Đổi MK Admin</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Selection */}

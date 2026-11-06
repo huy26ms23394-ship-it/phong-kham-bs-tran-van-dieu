@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Shield,
   Mail,
+  KeyRound,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -57,6 +58,7 @@ interface NavbarProps {
   currentUser?: ClinicUser | null;
   pendingUsersCount?: number;
   onOpenUserApprovalModal?: () => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -88,6 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   pendingUsersCount = 0,
   onOpenUserApprovalModal,
+  onOpenChangePassword,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -136,8 +139,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       <header className="no-print w-full bg-white dark:bg-[#0b0f17] border-b border-slate-200/90 dark:border-slate-800 transition-colors duration-200 sticky top-0 z-30 shadow-2xs">
-        {/* TIER 1: Minimalist Brand & Primary Actions */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-12 sm:h-13 flex items-center justify-between gap-2">
+        {/* TIER 1: Minimalist Brand & Primary Actions (Widescreen W-Full Max-W-[1840px]) */}
+        <div className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 h-14 sm:h-16 flex items-center justify-between gap-4">
           {/* Brand Identity */}
           <div
             className="flex items-center gap-2 min-w-0 select-none cursor-default"
@@ -149,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="min-w-0">
               <span className="text-xs sm:text-sm font-extrabold tracking-tight text-slate-900 dark:text-slate-100 uppercase truncate block">
                 <span className="sm:hidden">PK. BS. Diệu</span>
-                <span className="hidden sm:inline">{(clinicInfo?.clinicName || 'PHÒNG KHÁM BÁC SĨ TRẦN VĂN DIỆU').replace('PHÒNG KHÁM ', 'PK. ')}</span>
+                <span className="hidden sm:inline">{String(clinicInfo?.clinicName || 'PHÒNG KHÁM BÁC SĨ TRẦN VĂN DIỆU').replace('PHÒNG KHÁM ', 'PK. ')}</span>
               </span>
               <span className="hidden md:inline text-[10px] font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200/80 dark:border-emerald-800/80 shrink-0">
                 CCHN: {clinicInfo?.licenseNumber || '08362/SYT-GPHĐ'}
@@ -252,6 +255,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
+            {/* Change Admin Password Button (Visible only to SUPER_ADMIN) */}
+            {currentUser?.role === 'SUPER_ADMIN' && onOpenChangePassword && (
+              <button
+                type="button"
+                onClick={onOpenChangePassword}
+                className="h-8.5 px-2.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-300 rounded-md font-bold text-xs flex items-center gap-1.5 transition-colors border border-amber-200 dark:border-amber-800/80 cursor-pointer"
+                title="Đổi mật khẩu tài khoản Quản Trị Viên (Master Admin)"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+                <span className="hidden xl:inline">Đổi MK Admin</span>
+              </button>
+            )}
+
             {/* Settings (Tablet & Desktop: md+) */}
             <button
               type="button"
@@ -270,6 +286,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onLogin={onGoogleLogin}
                 onLogout={onGoogleLogout}
                 onOpenGmailInbox={onOpenGmailInbox}
+                onOpenChangePassword={onOpenChangePassword}
               />
             </div>
 
@@ -306,7 +323,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* TIER 2: Workspace Sub-Menu & Clinical Tools Toolbar (IPAD & DESKTOP: md+) */}
         {/* Hidden on mobile (< md) to eliminate clutter and save valuable screen height */}
         <div className="hidden md:block bg-slate-50/80 dark:bg-[#121824]/90 border-t border-slate-200/80 dark:border-slate-800/80">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-1.5 flex items-center justify-between gap-3 flex-nowrap">
+          <div className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 py-2 flex items-center justify-between gap-4 flex-nowrap">
             {/* Left: 4 Primary Workspace Navigation Tabs */}
             <nav
               aria-label="Điều hướng phân hệ làm việc"

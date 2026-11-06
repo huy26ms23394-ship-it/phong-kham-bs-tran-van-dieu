@@ -809,52 +809,52 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
   ]);
 
   return (
-    <div className="space-y-6">
-      {/* Clinic Header Banner: Slim, space-saving clinical strip */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 text-white px-4 py-2.5 rounded-md shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border border-emerald-700/60">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-white/10 flex items-center justify-center shrink-0 border border-white/15">
-            <Stethoscope className="w-4 h-4 text-emerald-300" />
+    <div className="space-y-6 lg:space-y-8">
+      {/* Clinic Header Banner: Expanded, elegant widescreen clinical banner */}
+      <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 text-white px-5 sm:px-6 py-3.5 sm:py-4 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-emerald-700/60 transition-all">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0 border border-white/20 shadow-inner">
+            <Stethoscope className="w-5 h-5 text-emerald-300" />
           </div>
           <div>
-            <h1 className="text-sm font-black tracking-tight uppercase flex items-center gap-2">
+            <h1 className="text-base sm:text-lg font-black tracking-tight uppercase flex items-center gap-2">
               <span>Khám Bệnh &amp; Kê Toa Thuốc</span>
-              <span className="text-[10px] font-normal normal-case text-emerald-200 hidden md:inline">
+              <span className="text-xs font-normal normal-case text-emerald-200 hidden md:inline">
                 · Đo sinh hiệu, kê đơn &amp; tạo lịch nhắc uống thuốc
               </span>
             </h1>
-            <p className="text-[11px] text-emerald-200/90 font-medium">
-              BS. Trần Văn Diệu · CCHN: {clinicInfo.licenseNumber} · {clinicInfo.phone}
+            <p className="text-xs text-emerald-200/90 font-medium">
+              BS. Trần Văn Diệu · CCHN: {clinicInfo?.licenseNumber || '08362/SYT-GPHĐ'} · {clinicInfo?.phone || ''}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <div className="hidden lg:flex items-center gap-1.5 text-[11px] font-mono text-emerald-200/80 bg-white/5 px-2.5 py-1 rounded border border-white/10">
-            <Keyboard className="w-3.5 h-3.5 text-emerald-300" />
+          <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-emerald-200/90 bg-white/10 px-3 py-1.5 rounded-lg border border-white/15">
+            <Keyboard className="w-4 h-4 text-emerald-300" />
             <span>Phím tắt: F1 (BN) · F2 (Thuốc) · F4 (Bệnh) · Ctrl+Enter (In)</span>
           </div>
 
           <button
             onClick={onOpenNewPatientModal}
-            className="h-8 px-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-md shadow-xs flex items-center justify-center gap-1.5 text-xs transition-all border border-amber-500/80 shrink-0 active:scale-98 cursor-pointer"
+            className="h-9 px-4 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg shadow-sm flex items-center justify-center gap-1.5 text-xs transition-all border border-amber-500/80 shrink-0 active:scale-98 cursor-pointer"
             title="Tiếp nhận bệnh nhân mới (Phím tắt: F3 hoặc Alt+N)"
           >
-            <UserPlus className="w-3.5 h-3.5 text-amber-950" />
+            <UserPlus className="w-4 h-4 text-amber-950" />
             <span>Tiếp Nhận BN</span>
-            <kbd className="hidden sm:inline px-1 py-0.2 text-[9px] font-mono bg-amber-500/40 text-amber-950 rounded font-bold">
+            <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] font-mono bg-amber-500/40 text-amber-950 rounded font-bold">
               F3
             </kbd>
           </button>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (2 Cols): Consultation & Rx Form */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* Main Grid: Widescreen balanced split (8 cols clinical form / 4 cols pharmacy catalog) */}
+      <div className="grid grid-cols-12 gap-6 lg:gap-8">
+        {/* Left Column (8 Cols on xl): Consultation & Rx Form */}
+        <div className="col-span-12 xl:col-span-8 space-y-6 lg:space-y-8">
           {/* Patient Selection Card */}
-          <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4 transition-colors">
+          <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4 transition-colors">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <label className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -2046,9 +2046,9 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
           </div>
         </div>
 
-        {/* Right Column (1 Col): Pharmacy Catalog & Quick Pick */}
-        <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3.5 sticky top-20 transition-colors">
+        {/* Right Column (4 Cols on xl): Pharmacy Catalog & Quick Pick */}
+        <div className="col-span-12 xl:col-span-4 space-y-4">
+          <div className="bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4 sticky top-20 transition-colors">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />

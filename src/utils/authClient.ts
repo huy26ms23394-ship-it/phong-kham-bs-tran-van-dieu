@@ -185,3 +185,19 @@ export async function deleteUser(email: string): Promise<{ success: boolean; err
     return { success: false, error: err.message };
   }
 }
+
+export async function changeAdminPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Lỗi kết nối máy chủ' };
+  }
+}
