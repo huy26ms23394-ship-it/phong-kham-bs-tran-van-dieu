@@ -3,8 +3,9 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { CrawledDrugItem, CrawlerSettings, CrawlerLogEntry, CrawlerStatusResponse } from '../types/crawler';
 
-const DATA_DIR = path.resolve(process.cwd(), 'server_data');
+const DATA_DIR = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
 const STORE_FILE = path.join(DATA_DIR, 'crawler_store.json');
+const ROOT_STORE_FILE = path.resolve(process.cwd(), 'server_data', 'crawler_store.json');
 
 // Kho dữ liệu công khai chuẩn hóa từ CSDL Dược Quốc Gia (DAV), Dược Thư Quốc Gia & OpenFDA Public Data
 const NATIONAL_DRUG_CRAWL_POOL: Omit<CrawledDrugItem, 'id' | 'crawledAt' | 'status'>[] = [
@@ -525,7 +526,9 @@ export class CrawlerService {
   constructor() {
     this.store = this.loadStore();
     this.computeNextRunTime();
-    this.startScheduler();
+    if (!process.env.VERCEL) {
+      this.startScheduler();
+    }
   }
 
   private loadStore(): CrawlerStore {
@@ -533,8 +536,9 @@ export class CrawlerService {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
-      if (fs.existsSync(STORE_FILE)) {
-        const raw = fs.readFileSync(STORE_FILE, 'utf-8');
+      const targetFile = fs.existsSync(STORE_FILE) ? STORE_FILE : fs.existsSync(ROOT_STORE_FILE) ? ROOT_STORE_FILE : null;
+      if (targetFile) {
+        const raw = fs.readFileSync(targetFile, 'utf-8');
         const parsed = JSON.parse(raw);
         return {
           settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },

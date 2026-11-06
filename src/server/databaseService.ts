@@ -29,6 +29,7 @@ export class DatabaseService {
   private static instance: DatabaseService;
   private readonly dataDir: string;
   private readonly clinicDbFile: string;
+  private readonly rootClinicDbFile: string;
   private readonly auditLogsFile: string;
 
   private pgPool: pg.Pool | null = null;
@@ -39,8 +40,9 @@ export class DatabaseService {
   private readonly supabaseKey?: string;
 
   private constructor() {
-    this.dataDir = path.resolve(process.cwd(), 'server_data');
+    this.dataDir = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
     this.clinicDbFile = path.join(this.dataDir, 'clinic_db.json');
+    this.rootClinicDbFile = path.resolve(process.cwd(), 'server_data', 'clinic_db.json');
     this.auditLogsFile = path.join(this.dataDir, 'audit_logs.jsonl');
 
     const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
@@ -192,8 +194,13 @@ export class DatabaseService {
 
     // 3. Fallback đọc Local JSON File
     try {
-      if (fs.existsSync(this.clinicDbFile)) {
-        const raw = fs.readFileSync(this.clinicDbFile, 'utf-8');
+      const targetFile = fs.existsSync(this.clinicDbFile)
+        ? this.clinicDbFile
+        : fs.existsSync(this.rootClinicDbFile)
+        ? this.rootClinicDbFile
+        : null;
+      if (targetFile) {
+        const raw = fs.readFileSync(targetFile, 'utf-8');
         const data = JSON.parse(raw) as ClinicSyncPayload;
         const etag = this.generateETag(data);
         return { data, etag };
