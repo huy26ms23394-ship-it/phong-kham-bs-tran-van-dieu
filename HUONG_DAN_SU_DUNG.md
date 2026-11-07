@@ -157,12 +157,21 @@ Bản in được thiết kế chuẩn mực theo quy định của Bộ Y Tế,
 
 ---
 
-## 7. Trợ Lý Lâm Sàng Gemini AI Hỗ Trợ Kê Đơn
+## 7. Trợ Lý Lâm Sàng Gemini AI Thế Hệ 3.5+ Hỗ Trợ Kê Đơn
 
-Nhấn <kbd>F7</kbd> (hoặc nút **Trợ Lý Gemini AI** màu xanh lá ở góc phải) để mở trợ lý trí tuệ nhân tạo chuyên sâu:
+Nhấn <kbd>F7</kbd> (hoặc nút **Trợ Lý Gemini AI** ở thanh điều hướng) để mở trợ lý trí tuệ nhân tạo chuyên sâu:
+* **Chuỗi Model AI Ưu Tiên (Auto-Fallback Chain):** `gemini-3.5-flash` (mặc định chính) $\rightarrow$ `gemini-3.8-flash` $\rightarrow$ `gemini-3.5-flash-lite` $\rightarrow$ `gemini-2.5-flash` $\rightarrow$ `Offline Clinical Rules Engine (0ms)`. Nếu bất kỳ model nào chạm quota hoặc giới hạn gói cước, hệ thống tự động nhảy sang model kế tiếp trong chuỗi mà không làm gián đoạn thao tác của Bác sĩ.
+* **Dropdown chọn Model AI:** Bác sĩ có thể chủ động chọn model mong muốn ngay trên thanh Header hoặc trong khung Trợ lý AI, đồng thời theo dõi tên model thực tế vừa phản hồi kèm thời gian xử lý (ms).
 * **Kiểm tra tương tác thuốc:** AI sẽ tự động đọc danh sách các thuốc đang có trong toa, kiểm tra xem có tương tác nguy hiểm (ví dụ: phối hợp thuốc gây suy thận, hạ huyết áp quá mức, hoặc kéo dài khoảng QT).
 * **Kiểm tra chống chỉ định với tiền sử bệnh nhân:** Ví dụ Bệnh nhân bị Loét dạ dày nhưng bác sĩ đang dự định kê NSAIDs liều cao, AI sẽ đề xuất phối hợp thêm PPI hoặc đổi hoạt chất an toàn hơn.
 * **Gợi ý lời dặn dò:** Tự động soạn sẵn các lưu ý chế độ ăn (hạn chế muối, kiêng bia rượu, theo dõi huyết áp nhật ký tại nhà).
+
+---
+
+## 7.1. Bộ Lọc Chống Trùng Thuốc Chuẩn Y Khoa & Gói 150+ Thuốc Thiết Yếu
+* **🧹 Nút Quét & Lọc Trùng Kho Thuốc:** Ngay trên tiêu đề Kho Thuốc, một cú nhấp chuột sẽ kích hoạt thuật toán chuẩn hóa `getDrugCanonicalKey` (chuẩn hóa tên, bỏ dấu, đồng nhất đơn vị g $\rightarrow$ mg, mcg $\rightarrow$ mg) để rà soát toàn bộ kho thuốc, tự động gộp các thuốc trùng lặp và đồng bộ ngay lên Supabase + Local Cache.
+* **⚡ Nút Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu:** Nạp sẵn danh mục hơn 150 biệt dược phổ biến nhất theo chuẩn 11 chuyên khoa nội khoa Việt Nam (Dược thư Quốc gia), tự động lọc bỏ các thuốc đã có trong kho và bổ sung đầy đủ liều dùng Sáng-Trưa-Chiều-Tối, cách uống và cảnh báo lâm sàng.
+* **🤖 Bot Cào Thuốc Mới Thông Minh:** Cơ chế loại trừ thông minh (Exclusion Prompting) gửi danh sách toàn bộ thuốc đã có vào prompt AI để chỉ cào các thuốc mới hoàn toàn theo 11 nhóm bệnh lý hoặc từ khóa hoạt chất do Bác sĩ chỉ định.
 
 ---
 
