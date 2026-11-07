@@ -422,8 +422,8 @@ export function auditPharmacyCatalog(catalog: MedicationCatalogItem[]): Pharmacy
   const substanceMap = new Map<string, MedicationCatalogItem[]>();
   for (const item of catalog) {
     if (handledIds.has(item.id)) continue;
-    const act = (item.activeIngredient || '').trim().toLowerCase();
-    const str = (item.strength || '').trim().toLowerCase().replace(/\s+/g, '');
+    const act = String(item.activeIngredient || '').trim().toLowerCase();
+    const str = String(item.strength || '').trim().toLowerCase().replace(/\s+/g, '');
     if (act && str && act.length > 3) {
       const key = `${act}_${str}`;
       if (!substanceMap.has(key)) {

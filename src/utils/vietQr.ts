@@ -24,7 +24,8 @@ export const POPULAR_VIETNAMESE_BANKS: BankOption[] = [
  * Loại bỏ dấu tiếng Việt để nội dung chuyển khoản không bị lỗi trên các app ngân hàng
  */
 export function removeVietnameseAccents(str: string): string {
-  return str
+  if (!str) return '';
+  return String(str)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')

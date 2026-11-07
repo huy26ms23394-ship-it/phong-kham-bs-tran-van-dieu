@@ -61,7 +61,7 @@ export const CashierPaymentModal: React.FC<CashierPaymentModalProps> = ({
   const bankId = clinicInfo.bankId || 'VCB';
   const accountNo = clinicInfo.bankAccountNo || '0071000987654';
   const accountName = clinicInfo.bankAccountName || clinicInfo.doctorName || 'TRAN VAN DIEU';
-  const transferContent = `${(prescriptionCode || '').replace(/[^a-zA-Z0-9]/g, '')} ${removeVietnameseAccents(patientName)}`.slice(0, 35);
+  const transferContent = `${String(prescriptionCode || '').replace(/[^a-zA-Z0-9]/g, '')} ${removeVietnameseAccents(patientName || '')}`.slice(0, 35);
 
   // Tạo URL VietQR
   const qrUrl = useMemo(() => {

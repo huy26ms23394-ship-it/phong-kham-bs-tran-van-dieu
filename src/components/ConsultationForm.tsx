@@ -636,7 +636,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
       doctorAdvice: doctorAdvice.trim() || 'Uống thuốc đầy đủ đúng giờ theo hướng dẫn, ăn nhạt, kiêng mỡ và đường. Tái khám đúng hẹn.',
       followUpDate,
       labOrder: (selectedLabTests.length > 0 || labDoctorNotes.trim() || labResultsSummary.trim()) ? {
-        orderCode: `XN-${(examinationDate || new Date().toISOString().split('T')[0]).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
+        orderCode: `XN-${String(examinationDate || new Date().toISOString().split('T')[0]).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
         orderDate: examinationDate || new Date().toISOString().split('T')[0],
         referralCenter: selectedLabCenter,
         selectedTestIds: selectedLabTests,

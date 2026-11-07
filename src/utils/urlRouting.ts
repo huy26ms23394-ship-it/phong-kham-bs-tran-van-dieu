@@ -15,7 +15,8 @@ export interface RouteState {
  * Phân tích hash URL hiện tại (VD: "#/consultation?patientId=pat-001")
  */
 export function parseCurrentRoute(): RouteState {
-  const hash = window.location.hash.replace(/^#\/?/, '');
+  const rawHash = typeof window !== 'undefined' && window.location?.hash ? window.location.hash : '';
+  const hash = String(rawHash || '').replace(/^#\/?/, '');
   if (!hash) {
     return { tab: 'consultation', params: {} };
   }

@@ -92,7 +92,8 @@ export function formatPrescriptionQuantity(quantity: number): string {
  * Chuẩn hóa viết hoa chữ cái đầu Họ và Tên tiếng Việt (VD: "nguyễn văn an" -> "Nguyễn Văn An")
  */
 export function formatVietnameseFullName(raw: string): string {
-  return raw
+  if (!raw) return '';
+  return String(raw)
     .trim()
     .replace(/\s+/g, ' ')
     .split(' ')

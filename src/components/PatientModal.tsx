@@ -509,7 +509,7 @@ export const PatientModal: React.FC<PatientModalProps> = ({
                   onClick={() => handleAddAllergy(opt)}
                   className="px-2 py-0.5 bg-white/90 dark:bg-slate-800 hover:bg-amber-200/70 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-200 rounded border border-amber-300/80 dark:border-amber-700 text-[11px] font-medium transition-colors cursor-pointer"
                 >
-                  + {opt.replace('Dị ứng ', '')}
+                  + {String(opt || '').replace('Dị ứng ', '')}
                 </button>
               ))}
             </div>

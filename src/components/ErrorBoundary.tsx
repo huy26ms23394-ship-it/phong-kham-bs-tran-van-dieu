@@ -39,6 +39,15 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  private handleClearCache = () => {
+    try {
+      localStorage.removeItem('mediba_pharmacy_catalog_v2');
+      localStorage.removeItem('mediba_consultation_draft_v2');
+    } catch {}
+    window.location.hash = '#/consultation';
+    window.location.reload();
+  };
+
   private handleGoHome = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
     window.location.hash = '#/consultation';
@@ -64,7 +73,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={this.handleReset}
@@ -80,6 +89,15 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               <Home className="w-3.5 h-3.5" />
               <span>Về Trang Khám Bệnh</span>
+            </button>
+            <button
+              type="button"
+              onClick={this.handleClearCache}
+              className="px-3 py-2 bg-rose-100 dark:bg-rose-900/40 hover:bg-rose-200 dark:hover:bg-rose-800/60 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Xóa cache thuốc và bản nháp để làm mới sạch sẽ"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Xóa Cache &amp; Làm Mới</span>
             </button>
           </div>
         </div>

@@ -381,7 +381,7 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        onApplyDietAdvice(result.text.replace(/###/g, '').trim());
+                        onApplyDietAdvice(String(result?.text || '').replace(/###/g, '').trim());
                         onClose();
                       }}
                       className="min-h-[44px] px-4 py-2 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white rounded-md font-bold flex items-center gap-2 transition-colors border border-emerald-700 dark:border-emerald-500 shadow-2xs"

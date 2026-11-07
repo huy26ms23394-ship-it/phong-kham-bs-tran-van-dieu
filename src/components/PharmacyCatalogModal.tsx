@@ -412,14 +412,14 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
       'Lưu ý',
     ];
     const rows = catalog.map((item) => [
-      `"${item.name.replace(/"/g, '""')}"`,
-      `"${(item.activeIngredient || '').replace(/"/g, '""')}"`,
-      `"${item.strength.replace(/"/g, '""')}"`,
-      `"${item.form.replace(/"/g, '""')}"`,
-      `"${item.unit.replace(/"/g, '""')}"`,
-      `"${item.category.replace(/"/g, '""')}"`,
-      `"${item.defaultInstructions.replace(/"/g, '""')}"`,
-      `"${(item.warningNote || '').replace(/"/g, '""')}"`,
+      `"${String(item.name || '').replace(/"/g, '""')}"`,
+      `"${String(item.activeIngredient || '').replace(/"/g, '""')}"`,
+      `"${String(item.strength || '').replace(/"/g, '""')}"`,
+      `"${String(item.form || '').replace(/"/g, '""')}"`,
+      `"${String(item.unit || '').replace(/"/g, '""')}"`,
+      `"${String(item.category || '').replace(/"/g, '""')}"`,
+      `"${String(item.defaultInstructions || '').replace(/"/g, '""')}"`,
+      `"${String(item.warningNote || '').replace(/"/g, '""')}"`,
     ]);
 
     const csvContent =
