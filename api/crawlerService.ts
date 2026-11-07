@@ -985,8 +985,10 @@ Trả về DUY NHẤT một mảng JSON các object theo đúng cấu trúc sau 
       prompt,
       preferredModel,
       jsonMode: true,
-      temperature: 0.2,
-      systemInstruction: 'Bạn là Hệ thống Cào & Làm giàu Dữ liệu Dược phẩm Quốc gia cho Phòng Khám BS. Trần Văn Diệu.',
+      temperature: 0.1,
+      systemInstruction:
+        'Hội đồng Dược Lâm Sàng & Bác sĩ Nội khoa tại Việt Nam, tuân thủ Dược thư Quốc gia Việt Nam và Phác đồ Bộ Y Tế. ' +
+        'Chỉ cào và trích xuất các biệt dược đang lưu hành hợp pháp tại Việt Nam.',
     });
 
     if (!result.success || !result.text) {

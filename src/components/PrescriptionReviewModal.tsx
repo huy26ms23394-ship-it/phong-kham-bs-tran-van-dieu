@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Prescription, ClinicSettings } from '../types/medical';
 import {
   formatMealTiming,
   formatDosageSummary,
   formatPrescriptionQuantity,
 } from '../utils/medicationSchedule';
+import {
+  evaluateFiveTierSafety,
+  FiveTierSafetyReport,
+} from '../services/offlineClinicalEngine';
+import {
+  formatCaseForPersonalGemini,
+  copyAndOpenPersonalGemini,
+} from '../utils/clinicalAi';
+import { ClinicalKnowledgeModal } from './ClinicalKnowledgeModal';
 import {
   Printer,
   X,
@@ -17,8 +26,17 @@ import {
   Save,
   Eye,
   ShieldCheck,
+  ShieldAlert,
   Stethoscope,
   Sparkles,
+  BookOpen,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Wifi,
+  WifiOff,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface PrescriptionReviewModalProps {
@@ -41,6 +59,69 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
   isDraft = true,
 }) => {
   const [activeTab, setActiveTab] = useState<'rx' | 'reminder' | 'both'>('rx');
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [showDetailedAlerts, setShowDetailedAlerts] = useState<boolean>(false);
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState<boolean>(false);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+
+  // Monitor online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // 0ms Offline 5-Tier Safety Engine Assessment
+  const safetyReport = useMemo(() => {
+    if (!prescription) return null;
+    return evaluateFiveTierSafety(
+      prescription.medications,
+      {
+        fullName: prescription.patientName,
+        birthYear: prescription.patientBirthYear,
+        gender: prescription.patientGender,
+        allergies: prescription.patientAllergies,
+        chronicConditions: [prescription.diagnosis],
+        diagnosis: prescription.diagnosis,
+        weight: prescription.vitalSigns?.weightKg,
+        vitals: prescription.vitalSigns
+          ? {
+              bloodPressureSystolic: prescription.vitalSigns.bloodPressureSystolic,
+              bloodPressureDiastolic: prescription.vitalSigns.bloodPressureDiastolic,
+              heartRate: prescription.vitalSigns.heartRate,
+              temperature: prescription.vitalSigns.temperature,
+            }
+          : undefined,
+      }
+    );
+  }, [prescription]);
+
+  // Handler for Copy Bệnh Án & Mở Gemini Cá Nhân
+  const handleCopyAndOpenGemini = () => {
+    if (!prescription) return;
+    const formattedCase = formatCaseForPersonalGemini({
+      patientName: prescription.patientName,
+      birthYear: prescription.patientBirthYear,
+      gender: prescription.patientGender,
+      allergies: prescription.patientAllergies,
+      chronicConditions: [prescription.diagnosis],
+      vitals: prescription.vitalSigns,
+      symptoms: prescription.symptoms,
+      diagnosis: prescription.diagnosis,
+      medications: prescription.medications,
+    });
+
+    copyAndOpenPersonalGemini(formattedCase);
+    setCopyToast('✓ Đã chép đầy đủ bệnh án! Đang mở Gemini Cá Nhân...');
+    setTimeout(() => setCopyToast(null), 3500);
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,11 +141,15 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
           onSaveOnly();
           onClose();
         }
+      } else if ((e.key === 'g' || e.key === 'G') && (e.altKey || e.metaKey)) {
+        // Alt + G: Copy Bệnh án & Mở Gemini Cá Nhân
+        e.preventDefault();
+        handleCopyAndOpenGemini();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onSaveOnly, onSaveAndPrint, onClose]);
+  }, [isOpen, onSaveOnly, onSaveAndPrint, onClose, prescription]);
 
   if (!isOpen || !prescription) return null;
 
@@ -176,6 +261,171 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
             </span>
           </div>
         </div>
+
+        {/* 5-TIER CLINICAL SAFETY & PERSONAL AI BAR */}
+        {safetyReport && (
+          <div className="bg-slate-900 border-b border-slate-800 text-white px-5 py-2.5 shrink-0 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              {/* Left: Safety Score & Active Tier Chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {safetyReport.isPerfect ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold shadow-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>✅ Đơn thuốc an toàn tuyệt đối (100/100) - Không phát hiện tương tác hay quá liều</span>
+                  </div>
+                ) : (
+                  <div
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border shadow-xs ${
+                      safetyReport.safetyScore >= 85
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                    }`}
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>Điểm An Toàn: {safetyReport.safetyScore}/100</span>
+                  </div>
+                )}
+
+                {/* Active Tier Chips */}
+                {safetyReport.tier1Alerts.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-600/30 text-rose-200 border border-rose-500/40 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    🔴 T1 Dị ứng ({safetyReport.tier1Alerts.length})
+                  </span>
+                )}
+                {safetyReport.tier2Alerts.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-600/30 text-amber-200 border border-amber-500/40 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    🟠 T2 Tương tác ({safetyReport.tier2Alerts.length})
+                  </span>
+                )}
+                {safetyReport.tier3Alerts.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-yellow-600/30 text-yellow-200 border border-yellow-500/40 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    🟡 T3 Bệnh nền/HA ({safetyReport.tier3Alerts.length})
+                  </span>
+                )}
+                {safetyReport.tier4Alerts.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-600/30 text-blue-200 border border-blue-500/40 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    🔵 T4 Liều/Thời điểm ({safetyReport.tier4Alerts.length})
+                  </span>
+                )}
+                {safetyReport.tier5Alerts.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-600/30 text-purple-200 border border-purple-500/40 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    🟣 T5 Lưu ý ({safetyReport.tier5Alerts.length})
+                  </span>
+                )}
+
+                {safetyReport.allAlerts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailedAlerts(!showDetailedAlerts)}
+                    className="text-[11px] text-slate-300 hover:text-white underline font-semibold flex items-center gap-0.5 ml-1 cursor-pointer"
+                  >
+                    <span>{showDetailedAlerts ? 'Ẩn chi tiết' : `Xem chi tiết (${safetyReport.allAlerts.length})`}</span>
+                    {showDetailedAlerts ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
+
+              {/* Right: Connection Status & Personal AI Tools */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Connection status */}
+                <span
+                  className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 border ${
+                    isOnline
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                      : 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                  }`}
+                  title={isOnline ? 'Online Cloud Gemini 3.5 Flash' : 'Offline Fallback Rules Engine 0ms'}
+                >
+                  {isOnline ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>🟢 Online Cloud AI (gemini-3.5-flash)</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                      <span>🟡 Fallback Offline Engine 0ms</span>
+                    </>
+                  )}
+                </span>
+
+                {/* Nút 🚀 Copy Bệnh Án & Mở Gemini Cá Nhân (Alt + G) */}
+                <button
+                  type="button"
+                  onClick={handleCopyAndOpenGemini}
+                  className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border border-indigo-400/40"
+                  title="Sao chép toàn bộ bệnh án, sinh hiệu, chẩn đoán và đơn thuốc rồi mở Gemini cá nhân (Alt + G)"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>🚀 Mở Gemini Cá Nhân</span>
+                  <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-indigo-950/80 text-indigo-200 rounded font-bold border border-indigo-400/30">
+                    Alt+G
+                  </kbd>
+                </button>
+
+                {/* Nút 📚 Kho Nguyên Tắc Y Khoa (Offline Engine) */}
+                <button
+                  type="button"
+                  onClick={() => setIsKnowledgeModalOpen(true)}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md text-xs font-semibold flex items-center gap-1 transition-all border border-slate-700 cursor-pointer"
+                  title="Mở tài liệu tra cứu các nguyên tắc 5 tầng y khoa & dược lâm sàng"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-300" />
+                  <span>📚 Kho Nguyên Tắc (0ms)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Toast notification for Alt+G copy */}
+            {copyToast && (
+              <div className="p-2 bg-indigo-900/90 text-indigo-100 rounded text-xs font-semibold flex items-center gap-2 border border-indigo-500/50">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>{copyToast}</span>
+              </div>
+            )}
+
+            {/* Detailed 5-Tier Alerts Drawer */}
+            {showDetailedAlerts && safetyReport.allAlerts.length > 0 && (
+              <div className="p-3 bg-slate-950 rounded-md border border-slate-800 space-y-2 mt-1 max-h-60 overflow-y-auto custom-scrollbar">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Chi tiết cảnh báo an toàn y khoa phát hiện trong toa:
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  {safetyReport.allAlerts.map((alert) => (
+                    <div
+                      key={alert.id}
+                      className={`p-2.5 rounded-md border ${
+                        alert.severity === 'contraindicated'
+                          ? 'bg-rose-950/50 border-rose-600/80 text-rose-100'
+                          : alert.severity === 'major'
+                          ? 'bg-amber-950/50 border-amber-600/80 text-amber-100'
+                          : 'bg-slate-900 border-slate-700 text-slate-200'
+                      }`}
+                    >
+                      <div className="font-bold flex items-center justify-between">
+                        <span>{alert.title}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/40">
+                          {alert.tierName}
+                        </span>
+                      </div>
+                      <p className="text-[11px] opacity-90 mt-1 leading-relaxed">
+                        {alert.description}
+                      </p>
+                      <p className="text-[11px] font-semibold text-emerald-300 mt-1">
+                        ↳ Hướng xử trí: {alert.recommendation}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Scrollable Document Canvas */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 bg-slate-100/70 dark:bg-slate-950/80 space-y-6">
@@ -589,6 +839,12 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
           </div>
         </div>
       </div>
+
+      {/* Clinical Knowledge & 5-Tier CDS Modal */}
+      <ClinicalKnowledgeModal
+        isOpen={isKnowledgeModalOpen}
+        onClose={() => setIsKnowledgeModalOpen(false)}
+      />
     </div>
   );
 };

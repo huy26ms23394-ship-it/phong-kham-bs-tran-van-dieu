@@ -194,3 +194,77 @@ export function deduplicateDrugCatalog<T extends DrugIdentity>(
 
   return { cleanCatalog, removedCount, duplicateGroups };
 }
+
+/**
+ * Xây dựng tập hợp khóa Exclusion Set từ danh mục thuốc đã có
+ */
+export function buildDrugExclusionSet(existingDrugs: DrugIdentity[]): Set<string> {
+  const set = new Set<string>();
+  for (const drug of existingDrugs) {
+    if (!drug || !drug.name) continue;
+    const { brandKey, innKey } = getDrugCanonicalKey(drug);
+    if (brandKey) set.add(brandKey);
+    if (innKey) set.add(innKey);
+    set.add(removeVietnameseAccents(drug.name).toLowerCase().replace(/[^a-z0-9]/g, ''));
+  }
+  return set;
+}
+
+/**
+ * Lọc chỉ lấy các thuốc MỚI hoàn toàn, không trùng với danh mục đã có (0ms Non-AI)
+ */
+export function filterNewDrugsOnly<T extends DrugIdentity>(
+  candidates: T[],
+  existingDrugs: DrugIdentity[]
+): {
+  newDrugs: T[];
+  skippedCount: number;
+  duplicateWithExisting: { candidate: T; matchedWith: string }[];
+} {
+  const exclusionSet = buildDrugExclusionSet(existingDrugs);
+  const newDrugs: T[] = [];
+  const duplicateWithExisting: { candidate: T; matchedWith: string }[] = [];
+  const addedInBatchSet = new Set<string>();
+  let skippedCount = 0;
+
+  for (const item of candidates) {
+    if (!item || !item.name) continue;
+    const { brandKey, innKey } = getDrugCanonicalKey(item);
+    const rawClean = removeVietnameseAccents(item.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const isExcluded =
+      (brandKey && exclusionSet.has(brandKey)) ||
+      (innKey && exclusionSet.has(innKey)) ||
+      (rawClean && exclusionSet.has(rawClean));
+
+    const isDuplicateInBatch =
+      (brandKey && addedInBatchSet.has(brandKey)) ||
+      (innKey && addedInBatchSet.has(innKey));
+
+    if (isExcluded || isDuplicateInBatch) {
+      skippedCount++;
+      duplicateWithExisting.push({
+        candidate: item,
+        matchedWith: isExcluded ? 'Đã có trong kho phòng khám' : 'Trùng với một thuốc khác trong đợt nạp',
+      });
+    } else {
+      newDrugs.push(item);
+      if (brandKey) addedInBatchSet.add(brandKey);
+      if (innKey) addedInBatchSet.add(innKey);
+    }
+  }
+
+  return { newDrugs, skippedCount, duplicateWithExisting };
+}
+
+/**
+ * Tạo chuỗi danh sách loại trừ (Exclusion List) truyền vào Prompt AI
+ */
+export function formatExclusionListForPrompt(existingDrugs: DrugIdentity[], maxCount = 60): string {
+  if (!existingDrugs || existingDrugs.length === 0) return 'Không có';
+  const names = existingDrugs
+    .slice(0, maxCount)
+    .map((d) => d.name + (d.strength ? ` ${d.strength}` : ''));
+  return names.join(', ');
+}
+

@@ -9,6 +9,15 @@ export const GEMINI_MODEL_CHAIN = [
 
 export type GeminiModelName = (typeof GEMINI_MODEL_CHAIN)[number] | 'offline-engine';
 
+export const SYSTEM_INSTRUCTION_VIETNAM_MEDICAL =
+  'Bạn là Hội đồng Dược Lâm Sàng & Bác sĩ Nội khoa tại Việt Nam, tuân thủ Dược thư Quốc gia Việt Nam và Phác đồ Bộ Y Tế. ' +
+  'Khi tư vấn hoặc tra cứu thuốc, bạn bắt buộc chỉ sử dụng các biệt dược đang lưu hành hợp pháp tại Việt Nam ' +
+  '(bao gồm cả thuốc biệt dược gốc như Nexium Mups, Klamentin, Co-Diovan, Forxiga, Januvia, Coversyl, Concor, Crestor, Lipanthyl, Plavix, Daflon, Ginkgo Biloba... ' +
+  'và các thuốc Generic phổ biến của DHG Pharma, Stada, Hasan, Imexpharm, Pymepharco, Sanofi VN, AstraZeneca VN...), ' +
+  'đi kèm đầy đủ: Tên biệt dược, Hoạt chất (INN), Hàm lượng chính xác, Phân vào đúng 1 trong 11 nhóm thuốc của phòng khám, ' +
+  'Liều gợi ý Sáng-Trưa-Chiều-Tối, Thời điểm uống (Trước/Sau ăn), Số đăng ký tham khảo và Giá ước tính (VNĐ). ' +
+  'Hệ thống đánh giá qua Ma trận Cảnh báo Y khoa 5 tầng (Tầng 1: Dị ứng, Tầng 2: Tương tác & Trùng hoạt chất, Tầng 3: Bệnh nền & Sinh hiệu, Tầng 4: Liều tối đa 24h & Cách dùng, Tầng 5: Lưu ý & Theo dõi).';
+
 export interface GeminiExecutionResult {
   success: boolean;
   text: string | null;
@@ -31,16 +40,17 @@ export interface GeminiCallOptions {
 /**
  * Thực thi gọi Google Gemini AI với cơ chế Auto-Fallback Chain y khoa:
  * gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> Offline Rules Engine
+ * Nhiệt độ mặc định: 0.1 (chuẩn y khoa, chống bịa đặt tên thuốc và hàm lượng)
  */
 export async function executeGeminiWithFallback(
   options: GeminiCallOptions
 ): Promise<GeminiExecutionResult> {
   const {
     prompt,
-    systemInstruction,
+    systemInstruction = SYSTEM_INSTRUCTION_VIETNAM_MEDICAL,
     preferredModel,
     jsonMode = false,
-    temperature = 0.2,
+    temperature = 0.1,
   } = options;
 
   // Nếu bác sĩ chủ động chọn chế độ Offline Clinical Rules Engine

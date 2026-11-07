@@ -563,17 +563,20 @@ ${(currentPrescription || [])
 === YÊU CẦU TỪ BÁC SĨ TRẦN VĂN DIỆU ===
 Hành động: ${action}
 Nội dung: ${query || 'Phân tích dữ liệu lâm sàng toàn diện'}
+
+QUY CHUẨN ĐÁNH GIÁ MA TRẬN Y KHOA 5 TẦNG BẮT BUỘC:
+1. 🔴 Tầng 1 - Dị ứng & Dị ứng chéo: Đối chiếu tiền sử dị ứng với từng hoạt chất.
+2. 🟠 Tầng 2 - Tương tác Thuốc - Thuốc & Trùng Hoạt Chất: Phát hiện tương tác kỵ nhau và trùng nhóm dược lý.
+3. 🟡 Tầng 3 - Đối soát Bệnh nền & Sinh hiệu: Kiểm tra huyết áp (<100 hoặc >=160), nhịp tim (<60), mức lọc cầu thận eGFR/CrCl, bệnh dạ dày thiếu PPI, đái tháo đường dùng corticoid.
+4. 🔵 Tầng 4 - Liều Tối Đa 24h & Cách Dùng: Kiểm tra tổng mg/ngày vượt ngưỡng Dược thư và chuẩn hóa giờ uống (Trước/Sau ăn).
+5. 🟣 Tầng 5 - Lưu ý Lâm sàng & Theo dõi: Dặn dò tác dụng phụ buồn ngủ, hạ đường huyết, ho khan, men gan/thận.
+KẾT LUẬN: Đưa ra ĐIỂM AN TOÀN ĐƠN THUỐC (0 - 100 điểm) và Khuyến nghị can thiệp dược lâm sàng rõ ràng.
 `;
 
     const result = await executeGeminiWithFallback({
       prompt: contextPrompt,
       preferredModel,
-      systemInstruction:
-        'Bạn là Trợ lý AI Cố vấn Lâm sàng Cấp cao của Bác Sĩ Trần Văn Diệu tại Phòng Khám Nội Khoa BS. Diệu. ' +
-        'Nhiệm vụ: 1. Cảnh báo tương tác thuốc và chống chỉ định. ' +
-        '2. Ưu tiên gợi ý thuốc CÓ SẴN trong danh mục phòng khám. ' +
-        '3. Hỗ trợ tra cứu chẩn đoán phân biệt và phác đồ chuẩn Bộ Y Tế. ' +
-        'Trả lời bằng phong cách chuyên môn y khoa chính xác, súc tích, phân mục rõ ràng.',
+      temperature: 0.1,
     });
 
     res.json({
@@ -632,19 +635,22 @@ apiRouter.post('/ai/lookup-drug', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Missing drugName' });
     }
 
-    const prompt = `Tra cứu thông tin biệt dược lâm sàng "${drugName}" theo Dược Thư Quốc Gia Việt Nam.
-Trả về DUY NHẤT một chuỗi JSON hợp lệ:
+    const prompt = `Tra cứu thông tin biệt dược lâm sàng "${drugName}" theo Dược Thư Quốc Gia Việt Nam và Cục Quản Lý Dược (DAV).
+BẮT BUỘC trả về DUY NHẤT một chuỗi JSON hợp lệ theo đúng cấu trúc sau (không kèm markdown thừa):
 {
-  "name": "${drugName}",
-  "activeIngredient": "Tên hoạt chất",
-  "strength": "Hàm lượng",
-  "form": "Dạng bào chế",
-  "unit": "viên hoặc gói",
-  "category": "Nhóm dược lý",
+  "name": "Tên biệt dược chính xác kèm hàm lượng",
+  "activeIngredient": "Tên hoạt chất quốc tế INN chính xác",
+  "strength": "Hàm lượng chính xác (VD: 40mg, 500mg, 5mg/1.25mg)",
+  "form": "Dạng bào chế chuẩn (Viên nén bao phim, Viên nang, Hỗn dịch...)",
+  "unit": "viên hoặc gói hoặc chai hoặc ống hoặc tuýp hoặc bình",
+  "category": "BẮT BUỘC chọn đúng 1 trong 11 nhóm: 'Dạ dày - Tiêu hóa', 'Kháng sinh', 'Tim mạch - Huyết áp', 'Đái tháo đường', 'Kháng viêm - Phù nề', 'Giảm đau - Hạ sốt', 'Vitamin & Bổ dưỡng', 'Tuần hoàn não', 'Cơ xương khớp', 'Hô hấp - Tai mũi họng', 'Mỡ máu - Tim mạch'",
   "defaultDosage": { "morning": 1, "noon": 0, "afternoon": 0, "evening": 0, "timing": "sau_an" },
-  "defaultDurationDays": 7,
-  "defaultInstructions": "Cách uống",
-  "warningNote": "Lưu ý an toàn"
+  "defaultDurationDays": 14,
+  "defaultInstructions": "Hướng dẫn uống chi tiết, chuẩn thời điểm",
+  "warningNote": "Cảnh báo chống chỉ định và tương tác y khoa quan trọng",
+  "registrationNumber": "Số đăng ký Bộ Y Tế lưu hành tại VN (VD: VN-..., VD-...)",
+  "manufacturer": "Hãng sản xuất chính hãng",
+  "estimatedPriceVnd": 15000
 }`;
 
     const result = await executeGeminiWithFallback({

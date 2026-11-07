@@ -34,10 +34,13 @@ export const getGoogleSearchUrl = (name: string, activeIngredient?: string): str
 import { lookupDrugFromPharmacopoeia } from '../utils/clinicalAi';
 import { EXPANDED_OUTPATIENT_MEDICATIONS } from '../data/expandedMedications';
 import { ESSENTIAL_CLINIC_DRUGS_150 } from '../data/essentialClinicDrugs150';
+import { VIETNAM_MARKET_DRUGS_CATALOG } from '../data/vietnamMarketDrugsCatalog';
 import {
   getDrugCanonicalKey,
   isDuplicateDrug,
   deduplicateDrugCatalog,
+  filterNewDrugsOnly,
+  buildDrugExclusionSet,
 } from '../utils/drugDeduplicator';
 import {
   CLINIC_CATEGORIES,
@@ -72,8 +75,14 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
   onBatchUpdateCatalog,
   onOpenCrawlerBot,
 }) => {
-  // Navigation View: 'catalog' (Danh mục thuốc) | 'audit' (Báo cáo & Lọc trùng)
-  const [activeView, setActiveView] = useState<'catalog' | 'audit'>('catalog');
+  // Navigation View: 'catalog' (Danh mục thuốc) | 'audit' (Báo cáo & Lọc trùng) | 'quick_import' (Nhập nhanh Non-AI 0ms)
+  const [activeView, setActiveView] = useState<'catalog' | 'audit' | 'quick_import'>('catalog');
+
+  // Quick Import Non-AI 0ms States
+  const [quickImportSearch, setQuickImportSearch] = useState('');
+  const [quickImportCategory, setQuickImportCategory] = useState('Tất cả');
+  const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(new Set());
+  const [quickPasteText, setQuickPasteText] = useState('');
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -460,6 +469,109 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
     showToast(`⚡ Đã nạp thành công +${newToAdd.length} thuốc thiết yếu (bỏ qua ${skippedCount} thuốc trùng)! Kho hiện có ${cleanCatalog.length} thuốc.`);
   };
 
+  // ⚡ Nạp Mở Rộng Kho Thuốc Việt Nam (267+ Biệt Dược Thị Trường VN - Non-AI Exclusion List)
+  const handleLoadVietnamMarketCatalog = () => {
+    const { newDrugs, skippedCount } = filterNewDrugsOnly(catalog, VIETNAM_MARKET_DRUGS_CATALOG);
+
+    if (newDrugs.length === 0) {
+      showToast(`✓ Toàn bộ ${VIETNAM_MARKET_DRUGS_CATALOG.length} biệt dược thị trường Việt Nam đã có sẵn trong kho phòng khám!`);
+      return;
+    }
+
+    if (
+      !confirm(
+        `⚡ XÁC NHẬN NẠP MỞ RỘNG KHO THUỐC VIỆT NAM (260+ THUỐC):\n` +
+        `- Số thuốc MỚI sẽ nạp: +${newDrugs.length} thuốc (phủ rộng cả 11 chuyên khoa, biệt dược lưu hành tại VN, SĐK, giá tham khảo, liều chuẩn)\n` +
+        `- Số thuốc trùng lặp đã tự động loại trừ (Exclusion List): ${skippedCount} thuốc\n\n` +
+        `Dữ liệu sẽ được nạp và lưu ngay lập tức lên Supabase + Local Cache với 1 cú nhấp chuột.`
+      )
+    ) {
+      return;
+    }
+
+    const merged = [...catalog, ...newDrugs];
+    const { cleanCatalog } = deduplicateDrugCatalog(merged);
+
+    if (onBatchUpdateCatalog) {
+      onBatchUpdateCatalog(cleanCatalog);
+    }
+    showToast(`⚡ Đã nạp thành công +${newDrugs.length} thuốc thị trường Việt Nam (bỏ qua ${skippedCount} thuốc trùng)! Kho hiện có ${cleanCatalog.length} thuốc.`);
+  };
+
+  // Nạp các thuốc được chọn trong tab Nhập Nhanh
+  const handleImportSelectedQuickDrugs = () => {
+    if (selectedImportIds.size === 0) {
+      showToast('Vui lòng chọn ít nhất 1 thuốc để nạp vào kho.');
+      return;
+    }
+
+    const itemsToImport = VIETNAM_MARKET_DRUGS_CATALOG.filter((it) => selectedImportIds.has(it.id));
+    const { newDrugs, skippedCount } = filterNewDrugsOnly(catalog, itemsToImport);
+
+    if (newDrugs.length === 0) {
+      showToast(`Các thuốc được chọn (${skippedCount} thuốc) đều đã có sẵn trong kho.`);
+      return;
+    }
+
+    const merged = [...catalog, ...newDrugs];
+    const { cleanCatalog } = deduplicateDrugCatalog(merged);
+
+    if (onBatchUpdateCatalog) {
+      onBatchUpdateCatalog(cleanCatalog);
+    }
+    setSelectedImportIds(new Set());
+    showToast(`📥 Đã nạp thành công +${newDrugs.length} thuốc mới vào kho (bỏ qua ${skippedCount} trùng)!`);
+  };
+
+  // Nạp từ text dán nhanh (mỗi dòng 1 tên biệt dược)
+  const handleImportFromPastedText = () => {
+    if (!quickPasteText.trim()) {
+      showToast('Vui lòng dán danh sách tên thuốc vào ô văn bản.');
+      return;
+    }
+
+    const lines = quickPasteText
+      .split('\n')
+      .map((l) => l.trim().toLowerCase())
+      .filter((l) => l.length > 1);
+
+    if (lines.length === 0) return;
+
+    // Tìm kiếm trong VIETNAM_MARKET_DRUGS_CATALOG
+    const matchedItems: MedicationCatalogItem[] = [];
+    lines.forEach((line) => {
+      const found = VIETNAM_MARKET_DRUGS_CATALOG.find(
+        (c) =>
+          c.name.toLowerCase().includes(line) ||
+          line.includes(c.name.toLowerCase()) ||
+          (c.activeIngredient && c.activeIngredient.toLowerCase().includes(line))
+      );
+      if (found && !matchedItems.some((m) => m.id === found.id)) {
+        matchedItems.push(found);
+      }
+    });
+
+    if (matchedItems.length === 0) {
+      showToast(`Không tìm thấy biệt dược khớp trong CSDL Việt Nam cho các dòng đã dán.`);
+      return;
+    }
+
+    const { newDrugs, skippedCount } = filterNewDrugsOnly(catalog, matchedItems);
+    if (newDrugs.length === 0) {
+      showToast(`Toàn bộ ${matchedItems.length} thuốc tìm thấy đã có sẵn trong kho phòng khám!`);
+      return;
+    }
+
+    const merged = [...catalog, ...newDrugs];
+    const { cleanCatalog } = deduplicateDrugCatalog(merged);
+
+    if (onBatchUpdateCatalog) {
+      onBatchUpdateCatalog(cleanCatalog);
+    }
+    setQuickPasteText('');
+    showToast(`📥 Đã tự động nhận diện & nạp +${newDrugs.length} thuốc mới vào kho (bỏ qua ${skippedCount} trùng)!`);
+  };
+
   // Load 44+ essential outpatient drugs
   const handleLoadFullOutpatientPack = () => {
     if (
@@ -652,6 +764,20 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
                 </span>
               )}
             </button>
+
+            {/* TAB 3: 📥 Nhập Nhanh Danh Sách Thuốc (0ms Non-AI) */}
+            <button
+              type="button"
+              onClick={() => setActiveView('quick_import')}
+              className={`min-h-[40px] px-4 py-2 rounded-md text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                activeView === 'quick_import'
+                  ? 'bg-teal-700 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>📥 Nhập Nhanh Danh Sách Thuốc (0ms Non-AI)</span>
+            </button>
           </div>
 
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:flex items-center gap-2">
@@ -686,15 +812,26 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
               {/* Quick Actions Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-md border border-slate-200/80 dark:border-slate-800">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Nút ⚡ Nạp Mở Rộng Kho Thuốc Việt Nam (260+ Thuốc) */}
+                  <button
+                    onClick={handleLoadVietnamMarketCatalog}
+                    type="button"
+                    className="min-h-[40px] px-3.5 py-2 bg-gradient-to-r from-emerald-700 via-teal-700 to-indigo-700 hover:from-emerald-800 hover:to-indigo-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-emerald-600 cursor-pointer animate-pulse-subtle"
+                    title="Nạp 260+ biệt dược thực tế tại thị trường Việt Nam (có SĐK, giá tham khảo, liều chuẩn, chống trùng tuyệt đối)"
+                  >
+                    <Zap className="w-4 h-4 text-emerald-300 fill-emerald-300" />
+                    <span>⚡ Nạp Mở Rộng Kho Thuốc VN (260+ Thuốc)</span>
+                  </button>
+
                   {/* Nút ⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu */}
                   <button
                     onClick={handleLoadEssential150Drugs}
                     type="button"
-                    className="min-h-[40px] px-3.5 py-2 bg-gradient-to-r from-amber-600 via-emerald-700 to-teal-700 hover:from-amber-700 hover:to-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-amber-600 cursor-pointer animate-pulse-subtle"
+                    className="min-h-[40px] px-3.5 py-2 bg-gradient-to-r from-amber-600 via-emerald-700 to-teal-700 hover:from-amber-700 hover:to-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-amber-600 cursor-pointer"
                     title="Nạp nhanh 150+ biệt dược thiết yếu theo 11 chuyên khoa, tự động đối chiếu chống trùng"
                   >
                     <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                    <span>⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu</span>
+                    <span>⚡ Nạp Bộ 150+ Thuốc</span>
                   </button>
 
                   {/* Nút 🧹 Quét & Lọc Trùng Kho Thuốc */}
@@ -1603,6 +1740,209 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
                     </div>
                   </div>
                 )}
+            </div>
+          )}
+
+          {/* ================= VIEW 3: QUICK IMPORT (0MS NON-AI) ================= */}
+          {activeView === 'quick_import' && (
+            <div className="space-y-4">
+              {/* Header Overview Card */}
+              <div className="p-4 rounded-md border border-teal-200 dark:border-teal-800/80 bg-gradient-to-br from-teal-50/70 via-white to-slate-50 dark:from-teal-950/40 dark:via-slate-900 dark:to-slate-900 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                      Nhập Nhanh Danh Sách Thuốc Thị Trường Việt Nam (0ms Non-AI)
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      Kho chuẩn 267+ biệt dược thực tế tại Việt Nam với SĐK, hãng dược, giá tham khảo và liều chuẩn. Tự động đối chiếu Exclusion List chống trùng 100%.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleLoadVietnamMarketCatalog}
+                      className="min-h-[38px] px-4 py-2 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-98 cursor-pointer"
+                    >
+                      <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                      <span>⚡ Nạp Tất Cả Thuốc Mới Còn Thiếu</span>
+                    </button>
+
+                    {selectedImportIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleImportSelectedQuickDrugs}
+                        className="min-h-[38px] px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-98 cursor-pointer"
+                      >
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>📥 Nạp Các Thuốc Đã Chọn ({selectedImportIds.size})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Search & Filter Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div className="sm:col-span-2 relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={quickImportSearch}
+                      onChange={(e) => setQuickImportSearch(e.target.value)}
+                      placeholder="Tìm theo tên biệt dược, hoạt chất (VD: Nexium, Klamentin, Concor, Atorvastatin...)"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={quickImportCategory}
+                      onChange={(e) => setQuickImportCategory(e.target.value)}
+                      className="w-full py-2 px-3 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Paste Text Box Section */}
+              <div className="p-3.5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <span>📋 Hoặc Dán Nhanh Danh Sách Thuốc Cần Nạp (Mỗi dòng 1 tên thuốc):</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleImportFromPastedText}
+                    className="px-3 py-1 bg-teal-700 hover:bg-teal-800 text-white rounded text-xs font-bold transition-all cursor-pointer"
+                  >
+                    📥 Nhận Diện &amp; Nạp 0ms
+                  </button>
+                </div>
+                <textarea
+                  value={quickPasteText}
+                  onChange={(e) => setQuickPasteText(e.target.value)}
+                  rows={2}
+                  placeholder="Ví dụ:&#10;Nexium 40mg&#10;Klamentin 1g&#10;Concor 5mg&#10;Crestor 10mg"
+                  className="w-full p-2.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-slate-800 dark:text-slate-200"
+                />
+              </div>
+
+              {/* Drug Cards Grid */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  <span>
+                    Danh sách thuốc ({VIETNAM_MARKET_DRUGS_CATALOG.length} thuốc có sẵn trong CSDL Việt Nam)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newIds = new Set<string>();
+                        VIETNAM_MARKET_DRUGS_CATALOG.forEach((it) => {
+                          const isDup = catalog.some((c) => isDuplicateDrug(c, it));
+                          if (!isDup) newIds.add(it.id);
+                        });
+                        setSelectedImportIds(newIds);
+                      }}
+                      className="text-teal-600 dark:text-teal-400 hover:underline font-bold"
+                    >
+                      Chọn tất cả thuốc mới
+                    </button>
+                    <span>·</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImportIds(new Set())}
+                      className="text-slate-500 hover:underline"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-[50vh] overflow-y-auto custom-scrollbar pr-1">
+                  {VIETNAM_MARKET_DRUGS_CATALOG
+                    .filter((item) => {
+                      const matchesSearch =
+                        item.name.toLowerCase().includes(quickImportSearch.toLowerCase()) ||
+                        (item.activeIngredient &&
+                          item.activeIngredient.toLowerCase().includes(quickImportSearch.toLowerCase())) ||
+                        item.category.toLowerCase().includes(quickImportSearch.toLowerCase());
+                      const matchesCategory =
+                        quickImportCategory === 'Tất cả' || item.category === quickImportCategory;
+                      return matchesSearch && matchesCategory;
+                    })
+                    .map((item) => {
+                      const isAlreadyInCatalog = catalog.some((c) => isDuplicateDrug(c, item));
+                      const isSelected = selectedImportIds.has(item.id);
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            if (isAlreadyInCatalog) return;
+                            const next = new Set(selectedImportIds);
+                            if (next.has(item.id)) next.delete(item.id);
+                            else next.add(item.id);
+                            setSelectedImportIds(next);
+                          }}
+                          className={`p-3 rounded-md border transition-all text-xs flex items-start gap-2.5 ${
+                            isAlreadyInCatalog
+                              ? 'bg-slate-100/80 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed'
+                              : isSelected
+                              ? 'bg-teal-50 dark:bg-teal-950/40 border-teal-500 dark:border-teal-600 shadow-2xs cursor-pointer'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-teal-400 cursor-pointer'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isAlreadyInCatalog || isSelected}
+                            disabled={isAlreadyInCatalog}
+                            onChange={() => {}}
+                            className="mt-1 rounded text-teal-600 focus:ring-teal-500 h-4 w-4 shrink-0"
+                          />
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm truncate">
+                                {item.name}
+                              </span>
+                              {isAlreadyInCatalog ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0">
+                                  ✓ Đã có trong kho
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 shrink-0 border border-emerald-300 dark:border-emerald-800">
+                                  + Mới sẵn sàng nạp
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-2 flex-wrap text-[11px]">
+                              <span>Hoạt chất: <strong className="text-indigo-700 dark:text-indigo-400">{item.activeIngredient}</strong></span>
+                              <span>·</span>
+                              <span>Hàm lượng: {item.strength}</span>
+                              <span>·</span>
+                              <span className="text-slate-500">{item.form}</span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+                              <span className="bg-slate-200/70 dark:bg-slate-700/70 px-2 py-0.5 rounded font-medium">
+                                {item.category}
+                              </span>
+                              <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">
+                                SĐK: {item.registrationNumber || 'Đang cập nhật'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -235,6 +235,22 @@ export const DrugDetailPopover: React.FC<DrugDetailPopoverProps> = ({
             </p>
           </div>
         )}
+
+        {/* Ma trận an toàn 5 tầng tóm lược */}
+        <div className="text-[10.5px] p-2 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-md border border-indigo-200/70 dark:border-indigo-800/60 space-y-1">
+          <div className="flex items-center justify-between font-bold text-indigo-950 dark:text-indigo-200">
+            <span>🛡️ Kiểm soát 5 Tầng Lâm Sàng:</span>
+            <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-indigo-200/60 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300">
+              0ms Engine
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600 dark:text-slate-300">
+            <div>• T1: Đối soát dị ứng chéo</div>
+            <div>• T2: Quét tương tác DDI</div>
+            <div>• T3: Khớp bệnh nền &amp; HA</div>
+            <div>• T4: Giới hạn liều 24h</div>
+          </div>
+        </div>
       </div>
 
       {/* Thanh chức năng nhanh: Cố định ở đáy, không bao giờ bị che khuất */}

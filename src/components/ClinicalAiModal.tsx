@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Patient,
   PrescribedMedication,
@@ -8,7 +8,10 @@ import {
 import {
   queryClinicCopilotWithFullContext,
   ClinicalAiResponse,
+  formatCaseForPersonalGemini,
+  copyAndOpenPersonalGemini,
 } from '../utils/clinicalAi';
+import { ClinicalKnowledgeModal } from './ClinicalKnowledgeModal';
 import {
   Sparkles,
   X,
@@ -25,6 +28,7 @@ import {
   RefreshCw,
   Copy,
   Check,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ClinicalAiModalProps {
@@ -77,6 +81,36 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
   const [result, setResult] = useState<ClinicalAiResponse | null>(null);
   const [chatQuestion, setChatQuestion] = useState('');
   const [copied, setCopied] = useState(false);
+  const [isKnowledgeOpen, setIsKnowledgeOpen] = useState(false);
+
+  const handleCopyCaseAndOpenGemini = () => {
+    const formattedCase = formatCaseForPersonalGemini({
+      patientName: patient?.fullName,
+      birthYear: patient?.birthYear,
+      gender: patient?.gender,
+      allergies: patient?.allergies,
+      chronicConditions: patient?.chronicConditions,
+      vitals,
+      symptoms,
+      diagnosis,
+      medications,
+    });
+    copyAndOpenPersonalGemini(formattedCase);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'g' || e.key === 'G') && (e.altKey || e.metaKey)) {
+        e.preventDefault();
+        handleCopyCaseAndOpenGemini();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, patient, medications, vitals, diagnosis, symptoms]);
 
   const handleModelChange = (newModel: string) => {
     setSelectedModel(newModel);
@@ -153,23 +187,49 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             {/* Dropdown chọn Model AI Thế Hệ 3.5+ & Auto-Fallback */}
             <div className="flex items-center gap-1.5 bg-slate-800/90 dark:bg-slate-900 border border-slate-700/80 rounded-md px-2.5 py-1 text-xs shadow-inner">
-              <span className="text-amber-300 font-bold hidden sm:inline text-[11px]">Model AI:</span>
+              <span className="text-amber-300 font-bold hidden sm:inline text-[11px]">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => handleModelChange(e.target.value)}
                 className="bg-transparent text-emerald-300 font-semibold text-xs focus:outline-hidden cursor-pointer border-none"
                 title="Chuỗi tự động chuyển đổi: gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> Offline Rules Engine"
               >
-                <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash (Mặc định)</option>
-                <option value="gemini-3.8-flash" className="bg-slate-900 text-white">Gemini 3.8 Flash (Thế hệ mới)</option>
-                <option value="gemini-3.5-flash-lite" className="bg-slate-900 text-white">Gemini 3.5 Flash-Lite (Tốc độ)</option>
-                <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash (Dự phòng)</option>
-                <option value="offline-engine" className="bg-slate-900 text-white">Offline Rules Engine (0ms)</option>
+                <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash</option>
+                <option value="gemini-3.8-flash" className="bg-slate-900 text-white">Gemini 3.8 Flash</option>
+                <option value="gemini-3.5-flash-lite" className="bg-slate-900 text-white">Gemini 3.5 Flash-Lite</option>
+                <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash</option>
+                <option value="offline-engine" className="bg-slate-900 text-white">Offline Rules 0ms</option>
               </select>
             </div>
+
+            {/* Nút 🚀 Mở Gemini Cá Nhân (Alt + G) */}
+            <button
+              type="button"
+              onClick={handleCopyCaseAndOpenGemini}
+              className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer border border-indigo-400/40"
+              title="Sao chép toàn bộ bệnh án và mở Gemini Cá Nhân (Alt + G)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline">🚀 Mở Gemini Cá Nhân</span>
+              <span className="sm:hidden">Gemini</span>
+              <kbd className="hidden md:inline px-1 py-0.2 text-[9px] font-mono bg-indigo-950/80 text-indigo-200 rounded">
+                Alt+G
+              </kbd>
+            </button>
+
+            {/* Nút 📚 Kho Nguyên Tắc (0ms) */}
+            <button
+              type="button"
+              onClick={() => setIsKnowledgeOpen(true)}
+              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold flex items-center gap-1 transition-all border border-slate-700 cursor-pointer"
+              title="Mở kho tài liệu nguyên tắc lâm sàng 5 tầng"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-indigo-300" />
+              <span className="hidden sm:inline">📚 Kho Nguyên Tắc</span>
+            </button>
 
             <button
               onClick={onClose}
@@ -471,6 +531,12 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Clinical Knowledge & 5-Tier CDS Modal */}
+      <ClinicalKnowledgeModal
+        isOpen={isKnowledgeOpen}
+        onClose={() => setIsKnowledgeOpen(false)}
+      />
     </div>
   );
 };

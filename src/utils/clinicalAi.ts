@@ -1,9 +1,13 @@
 import { Patient, PrescribedMedication, MedicationCatalogItem } from '../types/medical';
 import { getAuthHeaders } from './authClient';
 import { runComprehensiveLocalSafetyCheck, ClinicalRuleAlert } from './clinicalRules';
+import {
+  evaluateFiveTierSafety,
+  FiveTierSafetyReport,
+} from '../services/offlineClinicalEngine';
 
-export { runComprehensiveLocalSafetyCheck };
-export type { ClinicalRuleAlert };
+export { runComprehensiveLocalSafetyCheck, evaluateFiveTierSafety };
+export type { ClinicalRuleAlert, FiveTierSafetyReport };
 
 export interface ClinicalAiResponse {
   text: string;
@@ -104,29 +108,105 @@ export async function queryClinicCopilotWithFullContext(
   };
 }
 
+export function formatCaseForPersonalGemini(params: {
+  patientName?: string;
+  birthYear?: number | string;
+  gender?: string;
+  allergies?: string[];
+  chronicConditions?: string[];
+  vitals?: {
+    bloodPressure?: string;
+    bloodPressureSystolic?: string | number;
+    bloodPressureDiastolic?: string | number;
+    pulse?: number;
+    heartRate?: number;
+    weight?: number;
+    weightKg?: number;
+  };
+  symptoms?: string;
+  diagnosis?: string;
+  medications?: Array<{
+    name: string;
+    activeIngredient?: string;
+    strength?: string;
+    dosage?: { morning?: number; noon?: number; afternoon?: number; evening?: number; timing?: string };
+    instructions?: string;
+    durationDays?: number;
+  }>;
+}): string {
+  const age = params.birthYear ? new Date().getFullYear() - Number(params.birthYear) : 'Chưa rõ';
+  const gender = params.gender === 'nam' ? 'Nam' : params.gender === 'nu' ? 'Nữ' : 'Chưa rõ';
+  const allergies = (params.allergies && params.allergies.length > 0) ? params.allergies.join(', ') : 'Chưa ghi nhận dị ứng thuốc';
+  const conditions = (params.chronicConditions && params.chronicConditions.length > 0) ? params.chronicConditions.join(', ') : 'Không có';
+
+  let bp = params.vitals?.bloodPressure;
+  if (!bp && params.vitals?.bloodPressureSystolic) {
+    bp = `${params.vitals.bloodPressureSystolic}/${params.vitals.bloodPressureDiastolic || 80} mmHg`;
+  }
+  const hr = params.vitals?.pulse || params.vitals?.heartRate;
+  const weight = params.vitals?.weight || params.vitals?.weightKg;
+
+  let text = `🩺 BỆNH ÁN HỘI CHẨN LÂM SÀNG - PHÒNG KHÁM BS. TRẦN VĂN DIỆU\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  text += `1. THÔNG TIN BỆNH NHÂN:\n`;
+  text += `- Họ và tên: ${params.patientName || 'Bệnh nhân'}\n`;
+  text += `- Tuổi: ${age} · Giới tính: ${gender}\n`;
+  text += `- Tiền sử bệnh nền: ${conditions}\n`;
+  text += `- Tiền sử dị ứng thuốc: ${allergies}\n`;
+  text += `- Sinh hiệu: Huyết áp: ${bp || 'Chưa đo'} · Nhịp tim: ${hr ? hr + ' bpm' : 'Chưa đo'} · Cân nặng: ${weight ? weight + ' kg' : 'Chưa cân'}\n\n`;
+
+  text += `2. LÝ DO KHÁM & CHẨN ĐOÁN:\n`;
+  text += `- Triệu chứng lâm sàng: ${params.symptoms || 'Khám nội khoa định kỳ'}\n`;
+  text += `- Chẩn đoán xác định: ${params.diagnosis || 'Chưa có chẩn đoán'}\n\n`;
+
+  text += `3. ĐƠN THUỐC DỰ KIẾN KÊ NGOẠI TRÚ:\n`;
+  if (!params.medications || params.medications.length === 0) {
+    text += `(Chưa chọn thuốc trong đơn)\n\n`;
+  } else {
+    params.medications.forEach((m, idx) => {
+      const d = m.dosage;
+      const doseStr = d ? `Sáng ${d.morning || 0}, Trưa ${d.noon || 0}, Chiều ${d.afternoon || 0}, Tối ${d.evening || 0} (${d.timing || 'sau_an'})` : 'Theo chỉ định';
+      text += `${idx + 1}. ${m.name} ${m.strength || ''} (Hoạt chất: ${m.activeIngredient || 'Chưa rõ'})\n`;
+      text += `   - Liều dùng: ${doseStr} · Dùng trong: ${m.durationDays || 7} ngày\n`;
+      if (m.instructions) text += `   - Dặn dò: ${m.instructions}\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `4. YÊU CẦU HỘI CHẨN HỘI ĐỒNG Y KHOA & GEMINI:\n`;
+  text += `Dưới vai trò là Hội đồng Dược Lâm Sàng & Bác sĩ Nội khoa tại Việt Nam tuân thủ Dược thư Quốc gia Việt Nam và Phác đồ Bộ Y Tế, xin đánh giá giúp BS. Trần Văn Diệu:\n`;
+  text += `[1] Rà soát 5 tầng an toàn y khoa (Dị ứng, Tương tác thuốc/trùng hoạt chất, Bệnh nền/HA/Nhịp tim/eGFR Cockcroft-Gault, Liều tối đa 24h & thời điểm uống, Lưu ý tác dụng phụ).\n`;
+  text += `[2] Góp ý tối ưu hóa đơn thuốc theo biệt dược đang lưu hành tại Việt Nam.\n`;
+  text += `[3] Đề xuất cận lâm sàng theo dõi (AST/ALT men gan, Creatinine/eGFR chức năng thận...).`;
+
+  return text;
+}
+
+export function copyAndOpenPersonalGemini(caseText: string): boolean {
+  try {
+    navigator.clipboard.writeText(caseText);
+    window.open('https://gemini.google.com/', '_blank');
+    return true;
+  } catch (err) {
+    console.error('Failed to copy to clipboard:', err);
+    window.open('https://gemini.google.com/', '_blank');
+    return false;
+  }
+}
+
 function generateRichCopilotFallback(payload: CopilotPayload): string {
   const p = payload.currentPatient;
   const meds = payload.currentPrescription || [];
-  const medNames = meds.map((m) => `${m.name} ${m.strength || ''}`.trim());
-  const diag = (payload.diagnosis || '').toLowerCase();
 
   if (payload.action === 'analyze_patient_and_prescription' || payload.action === 'check_interactions') {
-    let out = `BÁO CÁO ĐÁNH GIÁ LÂM SÀNG & TƯƠNG TÁC THUỐC (BS. TRẦN VĂN DIỆU)\n\n`;
-    out += `1. Thông tin Bệnh nhân: ${p?.fullName || 'Bệnh nhân'} · Tuổi: ${p?.birthYear ? new Date().getFullYear() - Number(p.birthYear) : 65} · Tiền sử: ${(p?.chronicConditions || []).join(', ') || 'Không ghi nhận'}\n`;
-    if (p?.allergies && p.allergies.length > 0 && !p.allergies[0].includes('Không có')) {
-      out += `⚠️ CẢNH BÁO DỊ ỨNG: Bệnh nhân có tiền sử dị ứng với: ${p.allergies.join(', ')}. Đã đối chiếu các thuốc trong đơn không trùng nhóm dị ứng.\n`;
-    }
-    out += `\n2. Đánh giá đơn thuốc hiện tại (${meds.length} thuốc):\n`;
-    if (meds.length === 0) {
-      out += `- Đơn thuốc hiện tại chưa có thuốc nào. Vui lòng chọn thuốc từ kho 44+ thuốc phòng khám hoặc bấm "Gợi ý phác đồ" để AI đề xuất.\n`;
-    } else {
-      meds.forEach((m, idx) => {
-        out += `   ${idx + 1}. ${m.name} ${m.strength || ''}: Sáng ${m.dosage?.morning || 0}, Trưa ${m.dosage?.noon || 0}, Chiều ${m.dosage?.afternoon || 0}, Tối ${m.dosage?.evening || 0} (${m.instructions || ''})\n`;
-      });
-      out += `\n3. Phân tích tương tác & An toàn:\n`;
-      const localAlerts = runComprehensiveLocalSafetyCheck({
-        medications: meds.map((m) => ({ name: m.name, activeIngredient: m.activeIngredient })),
-        chronicConditions: p?.chronicConditions || [],
+    const report = evaluateFiveTierSafety(
+      meds,
+      {
+        birthYear: p?.birthYear,
+        gender: p?.gender,
+        allergies: p?.allergies,
+        chronicConditions: p?.chronicConditions,
+        weight: payload.vitals?.weight,
         vitals: payload.vitals
           ? {
               bloodPressureSystolic: payload.vitals.bloodPressure?.split('/')[0],
@@ -134,25 +214,94 @@ function generateRichCopilotFallback(payload: CopilotPayload): string {
               heartRate: payload.vitals.pulse,
             }
           : undefined,
-      });
-
-      if (localAlerts.length > 0) {
-        localAlerts.forEach((a, i) => {
-          const icon = a.severity === 'contraindicated' ? '⛔ CHỐNG CHỈ ĐỊNH' : a.severity === 'major' ? '⚠️ TƯƠNG TÁC NẶNG' : 'ℹ️ CHÚ Ý';
-          out += `${i + 1}. [${icon}] ${a.title}\n   - Cơ chế: ${a.description}\n   - Khuyến nghị BS: ${a.recommendation}\n\n`;
-        });
-      } else {
-        const combined = medNames.join(', ');
-        if (combined.includes('Amlor') && combined.includes('Lipitor')) {
-          out += `- Amlodipine + Atorvastatin: Phối hợp chuẩn trong kiểm soát huyết áp và rối loạn lipid máu; dung nạp tốt, liều Atorvastatin khuyến cáo <= 20-40mg/ngày.\n`;
-        } else if (combined.includes('Aspirin') && combined.includes('Plavix')) {
-          out += `- Liệu pháp kháng tiểu cầu kép (DAPT): Khuyến cáo bổ sung thuốc bảo vệ niêm mạc dạ dày (Esomeprazole 40mg trước ăn sáng 30p).\n`;
-        } else {
-          out += `- Không phát hiện tương tác đối kháng nghiêm trọng ở liều hiện tại. Các thuốc phân bổ thời điểm uống hợp lý.\n`;
-        }
+        diagnosis: payload.diagnosis,
       }
+    );
+
+    const age = p?.birthYear ? new Date().getFullYear() - Number(p.birthYear) : 65;
+
+    let out = `HỘI ĐỒNG DƯỢC LÂM SÀNG & BÁC SĨ NỘI KHOA (OFFLINE CDS 0MS)\n`;
+    out += `Tuân thủ Dược thư Quốc gia Việt Nam & Phác đồ Bộ Y Tế\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    out += `📊 ĐIỂM AN TOÀN ĐƠN THUỐC: ${report.safetyScore}/100 Điểm `;
+    if (report.isPerfect) {
+      out += `(✅ Tuyệt đối an toàn - Không phát hiện tương tác hay quá liều)\n`;
+    } else if (report.safetyScore >= 80) {
+      out += `(🟡 Đơn thuốc khá tốt, có lưu ý cần điều chỉnh nhẹ)\n`;
+    } else {
+      out += `(🔴 Cần rà soát kỹ các tương tác hoặc liều lượng bên dưới)\n`;
     }
-    out += `\n4. Khuyến nghị lâm sàng của AI:\n- Huyết áp mục tiêu: < 130/80 mmHg.\n- Đề nghị kiểm tra chức năng gan (AST, ALT) và thận (Creatinine/eGFR) định kỳ 3-6 tháng.\n- Dặn bệnh nhân duy trì chế độ ăn nhạt (< 5g muối/ngày) và tái khám đúng lịch.`;
+
+    out += `\n👤 Bệnh nhân: ${p?.fullName || 'Bệnh nhân'} · Tuổi: ${age} (${p?.gender === 'nam' ? 'Nam' : 'Nữ'})`;
+    if (report.estimatedCrCl) {
+      out += ` · CrCl ước tính (Cockcroft-Gault): ${report.estimatedCrCl} mL/min`;
+    }
+    if (payload.vitals?.bloodPressure) {
+      out += ` · HA: ${payload.vitals.bloodPressure}`;
+    }
+    if (payload.vitals?.pulse) {
+      out += ` · Nhịp tim: ${payload.vitals.pulse} bpm`;
+    }
+    out += `\nTiền sử bệnh: ${(p?.chronicConditions || []).join(', ') || 'Không ghi nhận'}\n\n`;
+
+    out += `💊 Danh sách thuốc kê (${meds.length} thuốc):\n`;
+    if (meds.length === 0) {
+      out += `- Đơn thuốc chưa có thuốc. Vui lòng chọn thuốc từ kho thuốc phòng khám.\n`;
+    } else {
+      meds.forEach((m, idx) => {
+        out += `   ${idx + 1}. ${m.name} ${m.strength || ''}: Sáng ${m.dosage?.morning || 0}, Trưa ${m.dosage?.noon || 0}, Chiều ${m.dosage?.afternoon || 0}, Tối ${m.dosage?.evening || 0} (${m.instructions || ''})\n`;
+      });
+    }
+
+    out += `\n🛡️ KẾT QUẢ ĐỐI SOÁT MA TRẬN CẢNH BÁO Y KHOA 5 TẦNG:\n`;
+
+    // Tier 1
+    if (report.tier1Alerts.length > 0) {
+      out += `\n🔴 TẦNG 1: CẢNH BÁO DỊ ỨNG & DỊ ỨNG CHÉO (${report.tier1Alerts.length})\n`;
+      report.tier1Alerts.forEach((item, i) => {
+        out += `   ${i + 1}. [${item.severity === 'contraindicated' ? 'CHỐNG CHỈ ĐỊNH' : 'CẢNH BÁO'}] ${item.title}\n      - Chi tiết: ${item.description}\n      - Hướng xử trí: ${item.recommendation}\n`;
+      });
+    }
+
+    // Tier 2
+    if (report.tier2Alerts.length > 0) {
+      out += `\n🟠 TẦNG 2: TƯƠNG TÁC THUỐC & TRÙNG HOẠT CHẤT (${report.tier2Alerts.length})\n`;
+      report.tier2Alerts.forEach((item, i) => {
+        out += `   ${i + 1}. [${item.severity === 'contraindicated' ? 'CHỐNG CHỈ ĐỊNH' : 'TƯƠNG TÁC'}] ${item.title}\n      - Cơ chế: ${item.description}\n      - Hướng xử trí: ${item.recommendation}\n`;
+      });
+    }
+
+    // Tier 3
+    if (report.tier3Alerts.length > 0) {
+      out += `\n🟡 TẦNG 3: BỆNH NỀN, SINH HIỆU & CHỨC NĂNG THẬN (${report.tier3Alerts.length})\n`;
+      report.tier3Alerts.forEach((item, i) => {
+        out += `   ${i + 1}. [${item.severity === 'contraindicated' ? 'CHỐNG CHỈ ĐỊNH' : 'LƯU Ý'}] ${item.title}\n      - Chi tiết: ${item.description}\n      - Hướng xử trí: ${item.recommendation}\n`;
+      });
+    }
+
+    // Tier 4
+    if (report.tier4Alerts.length > 0) {
+      out += `\n🔵 TẦNG 4: LIỀU TỐI ĐA 24H & THỜI ĐIỂM UỐNG (${report.tier4Alerts.length})\n`;
+      report.tier4Alerts.forEach((item, i) => {
+        out += `   ${i + 1}. [${item.severity === 'contraindicated' ? 'QUÁ LIỀU' : 'CHỈNH LIỀU'}] ${item.title}\n      - Chi tiết: ${item.description}\n      - Khuyến nghị: ${item.recommendation}\n`;
+      });
+    }
+
+    // Tier 5
+    if (report.tier5Alerts.length > 0) {
+      out += `\n🟣 TẦNG 5: LƯU Ý LÂM SÀNG & THEO DÕI XÉT NGHIỆM (${report.tier5Alerts.length})\n`;
+      report.tier5Alerts.forEach((item, i) => {
+        out += `   ${i + 1}. [THEO DÕI] ${item.title}: ${item.description} (Khuyến nghị: ${item.recommendation})\n`;
+      });
+    }
+
+    if (report.allAlerts.length === 0) {
+      out += `\n✅ Không phát hiện bất kỳ nguy cơ tương tác, quá liều hay chống chỉ định nào theo Dược thư Quốc gia Việt Nam.\n`;
+    }
+
+    out += `\n📋 LỜI DẶN BỆNH NHÂN TỔNG QUÁT:\n- Uống thuốc đúng giờ, tái khám sau 7 - 14 ngày hoặc ngay khi có dấu hiệu bất thường.\n- Chế độ ăn giảm muối (<5g/ngày), hạn chế đồ dầu mỡ và uống đủ 1.5 - 2 lít nước/ngày.`;
+
     return out;
   }
 
