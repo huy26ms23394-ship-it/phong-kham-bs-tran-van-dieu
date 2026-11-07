@@ -34,6 +34,7 @@ export const PrintableClinicPrescription: React.FC<PrintableClinicPrescriptionPr
   clinicInfo,
   template: initialTemplate,
   onUpdateTemplate,
+  onClose,
 }) => {
   // 1. Quản lý Đa Mẫu Toa Thuốc (4 Templates) - Mặc định Mẫu 1 (BS. Diệu A5)
   const [templateId, setTemplateId] = useState<PrescriptionTemplateType>(() => loadSavedTemplateId());

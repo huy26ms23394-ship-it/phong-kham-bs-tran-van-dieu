@@ -19,13 +19,18 @@ export interface PrescribedMedication {
   form: string; // Viên nén, viên nang, gói, chai, ống...
   unit: string; // viên, gói, chai, ml...
   totalQuantity: number; // Tổng số lượng cấp
+  quantity?: number; // Alias tiện ích cho tổng số lượng
   dosage: MedicationDosage; // Phân bổ liều dùng trong ngày
   durationDays: number; // Số ngày uống
   instructions: string; // Hướng dẫn sử dụng
   warningOrNote?: string; // Lưu ý đặc biệt cho bệnh nhân
+  warningNote?: string; // Alias lưu ý
+  category?: string; // Phân nhóm chuyên khoa
+  timing?: string; // Thời điểm dùng thuốc
 }
 
 export interface VitalSigns {
+  bloodPressure?: string; // Huyết áp định dạng '130/80' (mmHg)
   bloodPressureSystolic?: number; // Huyết áp tâm thu (mmHg)
   bloodPressureDiastolic?: number; // Huyết áp tâm trương (mmHg)
   heartRate?: number; // Nhịp tim (nhịp/phút)
@@ -97,6 +102,8 @@ export interface Prescription {
   followUpDate?: string; // Ngày hẹn tái khám
   labOrder?: LabOrder; // Phiếu chỉ định xét nghiệm cận lâm sàng (Trung tâm 548)
   labResultsSummary?: string; // Tóm tắt kết quả xét nghiệm bệnh nhân mang về
+  doctorName?: string; // Tên bác sĩ phụ trách
+  clinicName?: string; // Tên phòng khám
   status: 'active' | 'completed' | 'archived';
   createdAt: string;
   updatedAt: string;

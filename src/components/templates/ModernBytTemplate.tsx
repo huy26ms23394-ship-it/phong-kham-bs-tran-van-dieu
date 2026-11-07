@@ -172,7 +172,7 @@ export const ModernBytTemplate: React.FC<ModernBytTemplateProps> = ({
                     {e > 0 ? `${e}` : '-'}
                   </td>
                   <td className="p-1 border-r border-slate-200 font-bold text-[8.5pt]">
-                    {med.quantity}
+                    {med.totalQuantity ?? med.quantity}
                   </td>
                   <td className="p-1 text-slate-700">
                     {med.unit || 'Viên'}

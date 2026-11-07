@@ -201,9 +201,9 @@ export const TraditionalA5Template: React.FC<TraditionalA5TemplateProps> = ({
                 </div>
                 <div className="shrink-0 font-bold text-[8.5pt]">
                   {isOverlay ? (
-                    <span>{med.quantity} {med.unit || 'viên'}</span>
+                    <span>{med.totalQuantity ?? med.quantity} {med.unit || 'viên'}</span>
                   ) : (
-                    <span>Số lượng: {med.quantity} {med.unit || 'viên'}</span>
+                    <span>Số lượng: {med.totalQuantity ?? med.quantity} {med.unit || 'viên'}</span>
                   )}
                 </div>
               </div>

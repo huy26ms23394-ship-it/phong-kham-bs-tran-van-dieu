@@ -100,9 +100,10 @@ export function calculatePrescriptionCost(
 export function generateVietQrUrl(params: {
   bankId: string;
   accountNo: string;
-  accountName: string;
-  amount: number;
-  content: string;
+  accountName?: string;
+  amount?: number;
+  content?: string;
+  memo?: string;
   template?: 'compact' | 'compact2' | 'qr_only' | 'print';
 }): string {
   const {
@@ -111,6 +112,7 @@ export function generateVietQrUrl(params: {
     accountName = '',
     amount = 0,
     content = '',
+    memo = '',
     template = 'compact2',
   } = params;
 
@@ -118,7 +120,8 @@ export function generateVietQrUrl(params: {
 
   const cleanBankId = bankId.trim().toUpperCase();
   const cleanAccountNo = accountNo.trim();
-  const cleanContent = removeVietnameseAccents(content).slice(0, 50); // Tối đa 50 ký tự chuẩn Napas
+  const finalContent = content || memo || '';
+  const cleanContent = removeVietnameseAccents(finalContent).slice(0, 50); // Tối đa 50 ký tự chuẩn Napas
   const cleanAccountName = removeVietnameseAccents(accountName);
 
   const queryParams = new URLSearchParams();
