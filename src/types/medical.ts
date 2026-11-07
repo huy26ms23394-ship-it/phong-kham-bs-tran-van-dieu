@@ -70,6 +70,7 @@ export interface ClinicSettings {
   bankId?: string; // Mã ngân hàng VietQR (VD: 'VCB', 'MB', 'TCB', 'BIDV', 'ICB')
   bankAccountNo?: string; // Số tài khoản ngân hàng
   bankAccountName?: string; // Tên chủ tài khoản
+  bankQrImage?: string; // Ảnh mã QR ngân hàng tải lên (cắt theo tỉ lệ 3:4, data URL base64)
   consultationFee?: number; // Tiền công khám bệnh mặc định (VNĐ)
 }
 

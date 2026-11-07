@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
 import { CrawledDrugItem, CrawlerSettings, CrawlerLogEntry, CrawlerStatusResponse } from './crawlerTypes.js';
+import { executeGeminiWithFallback } from './geminiService.js';
+import { getDrugCanonicalKey } from './drugDeduplicator.js';
 
 const DATA_DIR = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
 const STORE_FILE = path.join(DATA_DIR, 'crawler_store.json');
@@ -647,7 +648,11 @@ export class CrawlerService {
 
   public async runCrawl(
     triggerType: 'scheduled' | 'manual',
-    clinicCatalogNames: string[] = []
+    clinicCatalogNames: string[] = [],
+    selectedCategory?: string,
+    keyword?: string,
+    exclusionList: string[] = [],
+    preferredModel?: string
   ): Promise<{ added: number; skipped: number; totalPending: number }> {
     // Tự động mở khóa nếu tiến trình trước đó chạy quá 8 giây (chống kẹt lock)
     if (this.isRunning) {
@@ -667,79 +672,84 @@ export class CrawlerService {
     let skippedCount = 0;
 
     try {
-      const { batchSize, targetCategories, autoDiscardDuplicates } = this.store.settings;
+      const batchSize = Math.max(10, Math.min(15, this.store.settings.batchSize || 10));
+      const targetCategories = selectedCategory && selectedCategory !== 'Tất cả'
+        ? [selectedCategory]
+        : this.store.settings.targetCategories;
 
-      // Danh sách tên thuốc đang trong hàng chờ để tuyệt đối không trùng trong hàng chờ
-      const pendingNames = new Set<string>(
-        this.store.pendingItems.map((item) => item.name.toLowerCase().trim())
-      );
+      // Danh sách khóa chuẩn hóa để loại trừ tuyệt đối chống trùng lặp y khoa
+      const existingBrandKeys = new Set<string>();
+      const existingInnKeys = new Set<string>();
+      const existingNames = new Set<string>();
 
-      // Danh sách tên thuốc đã có trong kho phòng khám
-      const existingNames = new Set<string>(pendingNames);
-      if (autoDiscardDuplicates) {
-        clinicCatalogNames.forEach((n) => {
-          if (n) existingNames.add(n.toLowerCase().trim());
-        });
-        this.store.approvedHistory.forEach((item) => {
-          if (item.name) existingNames.add(item.name.toLowerCase().trim());
-        });
-      }
+      // Đăng ký toàn bộ thuốc đang có trong hàng chờ duyệt
+      this.store.pendingItems.forEach((item) => {
+        if (item.name) existingNames.add(item.name.toLowerCase().trim());
+        const { brandKey, innKey } = getDrugCanonicalKey(item);
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+      });
+
+      // Đăng ký toàn bộ thuốc trong kho phòng khám và danh sách loại trừ
+      const allExclusions = [...clinicCatalogNames, ...exclusionList];
+      allExclusions.forEach((n) => {
+        if (!n) return;
+        existingNames.add(n.toLowerCase().trim());
+        const { brandKey, innKey } = getDrugCanonicalKey({ name: n });
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+      });
+
+      this.store.approvedHistory.forEach((item) => {
+        if (item.name) existingNames.add(item.name.toLowerCase().trim());
+        const { brandKey, innKey } = getDrugCanonicalKey(item);
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+      });
 
       let candidates: CrawledDrugItem[] = [];
 
-      // 1. Thử dùng Gemini AI nếu có API Key để cào dữ liệu thuốc mới nhất theo chuẩn Dược Thư
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (apiKey && apiKey.trim().length > 0) {
-        try {
-          candidates = await this.crawlWithGemini(apiKey, batchSize, targetCategories, existingNames);
-        } catch (aiErr) {
-          console.warn('[CrawlerService] Gemini AI crawl failed, falling back to public registry:', aiErr);
-        }
+      // 1. Thử dùng Gemini AI với cơ chế Exclusion Prompting & Auto-Fallback Chain
+      try {
+        candidates = await this.crawlWithGeminiExclusion({
+          batchSize,
+          categories: targetCategories,
+          keyword,
+          exclusionNames: existingNames,
+          preferredModel,
+        });
+      } catch (aiErr) {
+        console.warn('[CrawlerService] Gemini AI crawl failed, falling back to public registry:', aiErr);
       }
 
-      // 2. Lấy từ kho CSDL Dược Quốc Gia (DAV) & Dược Thư Công Khai theo đúng nhóm bệnh ưu tiên
+      // 2. Lấy từ kho CSDL Dược Quốc Gia (DAV) & Dược Thư Công Khai nếu AI trả về chưa đủ batch
       if (candidates.length < batchSize) {
         let poolFiltered = NATIONAL_DRUG_CRAWL_POOL.filter((item) => {
           const matchCat =
             targetCategories.length === 0 || targetCategories.includes(item.category);
-          const notDuplicate = !existingNames.has(item.name.toLowerCase().trim());
-          return matchCat && notDuplicate;
+          const matchKeyword = !keyword ||
+            item.name.toLowerCase().includes(keyword.toLowerCase()) ||
+            (item.activeIngredient && item.activeIngredient.toLowerCase().includes(keyword.toLowerCase()));
+          const { brandKey, innKey } = getDrugCanonicalKey(item);
+          const notDuplicate =
+            !existingNames.has(item.name.toLowerCase().trim()) &&
+            (!brandKey || !existingBrandKeys.has(brandKey)) &&
+            (!innKey || !existingInnKeys.has(innKey));
+          return matchCat && matchKeyword && notDuplicate;
         });
 
         // Nếu nhóm ưu tiên đã cào hết, mở rộng sang toàn bộ các nhóm khác trong CSDL Dược Quốc Gia
         if (poolFiltered.length < batchSize - candidates.length) {
           const extraFromAllCategories = NATIONAL_DRUG_CRAWL_POOL.filter((item) => {
-            const notDuplicate = !existingNames.has(item.name.toLowerCase().trim());
+            const { brandKey, innKey } = getDrugCanonicalKey(item);
+            const notDuplicate =
+              !existingNames.has(item.name.toLowerCase().trim()) &&
+              (!brandKey || !existingBrandKeys.has(brandKey)) &&
+              (!innKey || !existingInnKeys.has(innKey));
             const notAlreadyPicked = !poolFiltered.some((p) => p.name === item.name);
             return notDuplicate && notAlreadyPicked;
           });
           poolFiltered = [...poolFiltered, ...extraFromAllCategories];
-        }
-
-        // Nếu đã duyệt hết hoặc không còn thuốc mới trong nhóm chỉ định, kết hợp lấy thuốc chưa có trong hàng chờ
-        if (poolFiltered.length === 0) {
-          const recycled = NATIONAL_DRUG_CRAWL_POOL.filter(
-            (item) => !pendingNames.has(item.name.toLowerCase().trim())
-          );
-          if (recycled.length > 0) {
-            poolFiltered = recycled;
-          } else {
-            // Thử nhanh OpenFDA API (timeout 2s) nếu còn thiếu
-            try {
-              const openFdaItems = await this.crawlOpenFdaPublicApi(batchSize, pendingNames);
-              candidates.push(...openFdaItems);
-            } catch {}
-
-            // Nếu vẫn thiếu, tạo biến thể biệt dược chuẩn từ kho dược quốc gia để luôn có thuốc mới cho bác sĩ
-            if (candidates.length < batchSize) {
-              const backupPool = NATIONAL_DRUG_CRAWL_POOL.map((base, idx) => ({
-                ...base,
-                name: `${base.name} (Đợt ${new Date().toLocaleDateString('vi-VN')})`,
-                registrationNumber: `${base.registrationNumber || 'DAV'}-${Math.floor(100 + Math.random() * 900)}`,
-              })).filter((item) => !pendingNames.has(item.name.toLowerCase().trim()));
-              poolFiltered = backupPool;
-            }
-          }
         }
 
         const needed = Math.max(0, batchSize - candidates.length);
@@ -761,15 +771,24 @@ export class CrawlerService {
 
       foundCount = candidates.length;
 
-      // Lọc và thêm vào danh sách chờ duyệt
+      // Lọc qua DrugDeduplicator và thêm vào danh sách chờ duyệt
       for (const item of candidates) {
         const nameLower = item.name.toLowerCase().trim();
-        if (pendingNames.has(nameLower)) {
+        const { brandKey, innKey } = getDrugCanonicalKey(item);
+
+        if (
+          existingNames.has(nameLower) ||
+          (brandKey && existingBrandKeys.has(brandKey)) ||
+          (innKey && existingInnKeys.has(innKey))
+        ) {
           skippedCount++;
           continue;
         }
 
-        pendingNames.add(nameLower);
+        existingNames.add(nameLower);
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+
         this.store.pendingItems.unshift(item);
         addedCount++;
       }
@@ -914,59 +933,81 @@ export class CrawlerService {
     }
   }
 
-  private async crawlWithGemini(
-    apiKey: string,
-    batchSize: number,
-    categories: string[],
-    existingNames: Set<string>
-  ): Promise<CrawledDrugItem[]> {
-    const ai = new GoogleGenAI({});
-    const targetCats = categories.length > 0 ? categories.join(', ') : 'Đa khoa, Nội khoa';
-    const excludeList = Array.from(existingNames).slice(0, 30).join(', ');
+  private async crawlWithGeminiExclusion(options: {
+    batchSize: number;
+    categories: string[];
+    keyword?: string;
+    exclusionNames: Set<string>;
+    preferredModel?: string;
+  }): Promise<CrawledDrugItem[]> {
+    const { batchSize, categories, keyword, exclusionNames, preferredModel } = options;
+    const targetCats = categories.length > 0 ? categories.join(', ') : '11 chuyên khoa nội ngoại trú';
+    
+    // Exclusion Prompting: Truyền danh sách biệt dược / hoạt chất đã có để AI loại trừ hoàn toàn
+    const excludeList = Array.from(exclusionNames).slice(0, 100).join('; ');
 
-    const prompt = `Bạn là Bot Crawler Dược phẩm tự động lấy thông tin công khai của Cục Quản Lý Dược Việt Nam (DAV) và Dược Thư Quốc Gia.
-Nhiệm vụ: Thu thập đúng ${batchSize} loại thuốc biệt dược lưu hành hợp pháp tại Việt Nam thuộc các nhóm: ${targetCats}.
-Tránh các thuốc sau đã có trong kho: ${excludeList || 'không có'}.
-Hãy trả về DUY NHẤT một mảng JSON các object theo cấu trúc:
+    let specialtyPrompt = `Nhóm chuyên khoa chỉ định: ${targetCats}.`;
+    if (keyword && keyword.trim()) {
+      specialtyPrompt += `\nƯU TIÊN ĐẶC BIỆT: Tìm các biệt dược liên quan trực tiếp đến từ khóa hoạt chất/bệnh lý: "${keyword.trim()}".`;
+    }
+
+    const prompt = `Bạn là Bot Crawler Dược Phẩm Cấp Cao theo chuẩn Dược Thư Quốc Gia Việt Nam và Cục Quản Lý Dược (DAV - Bộ Y Tế).
+Nhiệm vụ: Tìm kiếm và thu thập chính xác ${batchSize} loại thuốc biệt dược CHÍNH HÃNG đang lưu hành phổ biến tại Việt Nam.
+
+${specialtyPrompt}
+
+QUY TẮC CHỐNG TRÙNG LẶP TUYỆT ĐỐI (EXCLUSION LIST):
+Các thuốc sau ĐÃ CÓ trong kho phòng khám, BẮT BUỘC KHÔNG ĐƯỢC TRÙNG tên biệt dược, không trùng tổ hợp hoạt chất + hàm lượng:
+[${excludeList || 'Chưa có'}]
+
+Chỉ lấy các thuốc MỚI HOÀN TOÀN so với danh sách trên.
+Trả về DUY NHẤT một mảng JSON các object theo đúng cấu trúc sau (không kèm markdown ngoài mảng json):
 [
   {
-    "name": "Tên biệt dược kèm hàm lượng (VD: Glucovance 500/5mg)",
-    "activeIngredient": "Hoạt chất quốc tế INN",
-    "strength": "Hàm lượng",
-    "form": "Dạng bào chế (Viên nén, Viên nang...)",
+    "name": "Tên biệt dược kèm hàm lượng chuẩn (VD: Nexium 40mg)",
+    "activeIngredient": "Hoạt chất quốc tế INN chuẩn y khoa",
+    "strength": "Hàm lượng chuẩn (VD: 40mg, 500mg, 1000mg)",
+    "form": "Dạng bào chế (Viên nén bao phim, Viên nang...)",
     "unit": "viên hoặc gói hoặc chai",
-    "category": "Nhóm thuộc danh mục chỉ định",
-    "registrationNumber": "Số ĐK Bộ Y Tế công khai (VD: VN-20183-16)",
-    "manufacturer": "Hãng sản xuất",
-    "source": "Cục Quản Lý Dược (DAV - Công khai)",
+    "category": "Một trong 11 nhóm: Dạ dày - Tiêu hóa, Kháng sinh, Tim mạch - Huyết áp, Đái tháo đường, Kháng viêm - Phù nề, Giảm đau - Hạ sốt, Vitamin & Bổ dưỡng, Tuần hoàn não, Cơ xương khớp, Hô hấp - Tai mũi họng, Mỡ máu - Tim mạch",
+    "registrationNumber": "Số đăng ký Bộ Y Tế công khai (VD: VN-12345-20)",
+    "manufacturer": "Hãng sản xuất và quốc gia",
+    "source": "Dược Thư Quốc Gia Việt Nam",
     "confidenceScore": 98,
     "defaultDosage": { "morning": 1, "noon": 0, "afternoon": 0, "evening": 0, "timing": "sau_an" },
-    "defaultDurationDays": 30,
-    "defaultInstructions": "Hướng dẫn uống chi tiết",
-    "warningNote": "Lưu ý hoặc chống chỉ định quan trọng"
+    "defaultDurationDays": 14,
+    "defaultInstructions": "Hướng dẫn uống chi tiết và thời điểm uống",
+    "warningNote": "Cảnh báo chống chỉ định và tương tác y khoa quan trọng"
   }
 ]`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      },
+    const result = await executeGeminiWithFallback({
+      prompt,
+      preferredModel,
+      jsonMode: true,
+      temperature: 0.2,
+      systemInstruction: 'Bạn là Hệ thống Cào & Làm giàu Dữ liệu Dược phẩm Quốc gia cho Phòng Khám BS. Trần Văn Diệu.',
     });
 
-    const parsed = JSON.parse(response.text || '[]');
-    if (!Array.isArray(parsed)) return [];
+    if (!result.success || !result.text) {
+      return [];
+    }
 
-    return parsed.map((item, idx) => ({
-      ...item,
-      id: `crawled_ai_${Date.now()}_${idx}`,
-      crawledAt: new Date().toISOString(),
-      status: 'pending' as const,
-      confidenceScore: item.confidenceScore || 96,
-      source: item.source || 'Cục Quản Lý Dược (DAV - Công khai)',
-    }));
+    try {
+      const parsed = JSON.parse(result.text || '[]');
+      if (!Array.isArray(parsed)) return [];
+
+      return parsed.map((item, idx) => ({
+        ...item,
+        id: `crawled_ai_${Date.now()}_${idx}`,
+        crawledAt: new Date().toISOString(),
+        status: 'pending' as const,
+        confidenceScore: item.confidenceScore || 98,
+        source: item.source || `Dược Thư Quốc Gia (${result.model})`,
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // Duyệt thuốc đơn lẻ

@@ -41,8 +41,11 @@ import {
   Database,
   Sparkles,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import { getGoogleSearchUrl } from './PharmacyCatalogModal';
+import { ESSENTIAL_CLINIC_DRUGS_150 } from '../data/essentialClinicDrugs150';
+import { getDrugCanonicalKey, isDuplicateDrug } from '../utils/drugDeduplicator';
 
 interface CrawlerBotModalProps {
   isOpen: boolean;
@@ -109,6 +112,17 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('Tất cả');
+
+  // Điều khiển cào thuốc theo 11 nhóm & Từ khóa hoạt chất / bệnh lý
+  const [crawlCategory, setCrawlCategory] = useState('Tất cả');
+  const [crawlKeyword, setCrawlKeyword] = useState('');
+  const [crawlModel, setCrawlModel] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mediba_preferred_ai_model') || 'gemini-3.5-flash';
+    } catch {
+      return 'gemini-3.5-flash';
+    }
+  });
 
   // Edit item state
   const [editingItem, setEditingItem] = useState<CrawledDrugItem | null>(null);
@@ -191,7 +205,57 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
     await loadAllData(false);
   };
 
-  // Kích hoạt bot cào thuốc thủ công với cơ chế bảo vệ timeout chống treo vĩnh viễn
+  // ⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu Phòng Khám
+  const handleQuickLoad150 = () => {
+    const existingBrandKeys = new Set<string>();
+    const existingInnKeys = new Set<string>();
+
+    clinicCatalog.forEach((item) => {
+      const { brandKey, innKey } = getDrugCanonicalKey(item);
+      if (brandKey) existingBrandKeys.add(brandKey);
+      if (innKey) existingInnKeys.add(innKey);
+    });
+
+    const newToAdd: MedicationCatalogItem[] = [];
+    let skipped = 0;
+
+    ESSENTIAL_CLINIC_DRUGS_150.forEach((item) => {
+      const { brandKey, innKey } = getDrugCanonicalKey(item);
+      const isDup =
+        (brandKey && existingBrandKeys.has(brandKey)) ||
+        (innKey && existingInnKeys.has(innKey)) ||
+        clinicCatalog.some((c) => isDuplicateDrug(c, item));
+
+      if (isDup) {
+        skipped++;
+      } else {
+        newToAdd.push(item);
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+      }
+    });
+
+    if (newToAdd.length === 0) {
+      showFeedback('info', `Kho thuốc phòng khám đã có đầy đủ ${ESSENTIAL_CLINIC_DRUGS_150.length} thuốc thiết yếu!`);
+      return;
+    }
+
+    if (
+      !confirm(
+        `⚡ XÁC NHẬN NẠP NHANH BỘ 150+ THUỐC THIẾT YẾU PHÒNG KHÁM:\n` +
+        `- Số thuốc MỚI sẽ nạp: +${newToAdd.length} thuốc (chuẩn 11 chuyên khoa, liều dùng, hướng dẫn)\n` +
+        `- Số thuốc trùng lặp đã tự động bỏ qua: ${skipped} thuốc\n\n` +
+        `Thuốc sẽ được nạp trực tiếp vào kho phòng khám và lưu ngay lên Supabase.`
+      )
+    ) {
+      return;
+    }
+
+    onAddApprovedDrugs(newToAdd);
+    showFeedback('success', `⚡ Đã nạp thành công +${newToAdd.length} thuốc thiết yếu (bỏ qua ${skipped} thuốc trùng) vào kho phòng khám!`);
+  };
+
+  // Kích hoạt bot cào thuốc với Exclusion Prompting & Auto-Fallback Chain
   const handleTriggerCrawl = async () => {
     if (isCrawling) return;
     const previousIds = new Set(pendingItems.map((item) => item.id));
@@ -201,19 +265,31 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
     setFeedbackMsg(null);
     setActiveTab('pending');
 
-    // Bộ đếm an toàn: Nếu quá 9.5s chưa xong, tự động mở khóa UI
+    // Bộ đếm an toàn: Nếu quá 12s chưa xong, tự động mở khóa UI
     if (crawlTimeoutTimerRef.current) clearTimeout(crawlTimeoutTimerRef.current);
     crawlTimeoutTimerRef.current = setTimeout(async () => {
-      console.warn('[CrawlerBot] Safety timeout triggered after 9.5s');
+      console.warn('[CrawlerBot] Safety timeout triggered after 12s');
       setIsCrawling(false);
       setIsLoading(false);
       showFeedback('error', 'Máy chủ phản hồi chậm. Bot đã tự động làm mới lại danh mục thuốc.');
       await loadAllData(false);
-    }, 9500);
+    }, 12000);
 
     try {
       const clinicNames = clinicCatalog.map((c) => c.name);
-      const res = await triggerCrawlerRun(clinicNames);
+      // Exclusion List: Lấy toàn bộ tên biệt dược và tổ hợp hoạt chất + hàm lượng
+      const exclusionList = clinicCatalog.map(
+        (c) => `${c.name} (${c.activeIngredient || ''} ${c.strength || ''})`.trim()
+      );
+
+      const res = await triggerCrawlerRun({
+        clinicCatalogNames: clinicNames,
+        exclusionList,
+        category: crawlCategory,
+        keyword: crawlKeyword,
+        model: crawlModel,
+      });
+
       setCrawlStepIndex(CRAWL_STEPS.length - 1);
       setCrawlProgress(100);
 
@@ -235,7 +311,10 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
         newlyCrawledItems: addedItems,
       });
 
-      showFeedback('success', `Thu thập thành công +${res.added} thuốc mới vào danh sách chờ duyệt!`);
+      showFeedback(
+        'success',
+        `Thu thập thành công +${res.added} thuốc mới thuộc ${crawlCategory !== 'Tất cả' ? `nhóm [${crawlCategory}]` : 'các nhóm chuyên khoa'} vào danh sách chờ duyệt!`
+      );
     } catch (err: unknown) {
       showFeedback('error', `Lỗi cào dữ liệu: ${(err as Error).message}`);
     } finally {
@@ -451,17 +530,17 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
               onClick={handleTriggerCrawl}
               disabled={isCrawling}
               className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 disabled:bg-emerald-900/60 text-white text-xs font-semibold rounded-md flex items-center gap-2 shadow-xs transition-all cursor-pointer disabled:cursor-wait active:scale-98"
-              title="Kích hoạt bot quét dữ liệu thuốc công khai ngay bây giờ"
+              title="Kích hoạt bot quét 10-15 thuốc mới theo nhóm chỉ định hoặc từ khóa"
             >
               {isCrawling ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
-                  <span>Đang quét ({crawlProgress}%)...</span>
+                  <span>Đang cào ({crawlProgress}%)...</span>
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Cào Thuốc Ngay</span>
+                  <span>Cào 10–15 Thuốc Mới</span>
                 </>
               )}
             </button>
@@ -470,6 +549,90 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
               className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* BANNER ĐIỀU KHIỂN CÀO THEO 11 CHUYÊN KHOA, TỪ KHÓA & NẠP NHANH 150+ THUỐC */}
+        <div className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 11 Nhóm chuyên khoa */}
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md px-2.5 py-1.5 shadow-2xs">
+              <Filter className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-bold text-slate-700 dark:text-slate-300 text-[11px]">Chuyên khoa:</span>
+              <select
+                value={crawlCategory}
+                onChange={(e) => setCrawlCategory(e.target.value)}
+                className="bg-transparent font-semibold text-slate-900 dark:text-slate-100 focus:outline-hidden cursor-pointer text-xs"
+              >
+                <option value="Tất cả" className="bg-slate-900 text-white">Tất cả (11 nhóm nội khoa)</option>
+                {AVAILABLE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat} className="bg-slate-900 text-white">
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tìm kiếm theo từ khóa hoạt chất / bệnh lý */}
+            <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md px-2.5 py-1 shadow-2xs">
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={crawlKeyword}
+                onChange={(e) => setCrawlKeyword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isCrawling) {
+                    handleTriggerCrawl();
+                  }
+                }}
+                placeholder="Từ khóa hoạt chất / bệnh lý (VD: Esomeprazole, Kháng đông...)"
+                className="bg-transparent text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden w-44 sm:w-60"
+              />
+              {crawlKeyword && (
+                <button
+                  type="button"
+                  onClick={() => setCrawlKeyword('')}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown chọn Model AI */}
+            <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <select
+                value={crawlModel}
+                onChange={(e) => {
+                  setCrawlModel(e.target.value);
+                  try {
+                    localStorage.setItem('mediba_preferred_ai_model', e.target.value);
+                  } catch {}
+                }}
+                className="bg-transparent font-semibold text-slate-800 dark:text-slate-200 focus:outline-hidden cursor-pointer text-[11px]"
+                title="Chuỗi tự động chuyển đổi model: gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash"
+              >
+                <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash (Mặc định)</option>
+                <option value="gemini-3.8-flash" className="bg-slate-900 text-white">Gemini 3.8 Flash</option>
+                <option value="gemini-3.5-flash-lite" className="bg-slate-900 text-white">Gemini 3.5 Flash-Lite</option>
+                <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash</option>
+                <option value="offline-engine" className="bg-slate-900 text-white">Offline Rules Engine (0ms)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Nút ⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu */}
+            <button
+              onClick={handleQuickLoad150}
+              type="button"
+              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 via-emerald-700 to-teal-700 hover:from-amber-700 hover:to-teal-800 text-white text-xs font-bold rounded-md flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer border border-amber-600"
+              title="Nạp ngay 150+ thuốc thiết yếu phòng khám, tự động bỏ qua các thuốc đã có trong kho"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+              <span>⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu</span>
             </button>
           </div>
         </div>

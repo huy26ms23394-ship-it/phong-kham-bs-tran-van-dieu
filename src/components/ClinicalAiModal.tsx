@@ -66,10 +66,24 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
   const [activeTab, setActiveTab] = useState<
     'full_review' | 'suggest_rx' | 'clinic_audit' | 'diet' | 'chat'
   >('full_review');
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mediba_preferred_ai_model') || 'gemini-3.5-flash';
+    } catch {
+      return 'gemini-3.5-flash';
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ClinicalAiResponse | null>(null);
   const [chatQuestion, setChatQuestion] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const handleModelChange = (newModel: string) => {
+    setSelectedModel(newModel);
+    try {
+      localStorage.setItem('mediba_preferred_ai_model', newModel);
+    } catch {}
+  };
 
   if (!isOpen) return null;
 
@@ -97,6 +111,7 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
       vitals,
       diagnosis,
       symptoms,
+      model: selectedModel,
     });
 
     setResult(res);
@@ -138,14 +153,33 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            type="button"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400"
-            aria-label="Đóng Trợ lý Gemini AI"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Dropdown chọn Model AI Thế Hệ 3.5+ & Auto-Fallback */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 dark:bg-slate-900 border border-slate-700/80 rounded-md px-2.5 py-1 text-xs shadow-inner">
+              <span className="text-amber-300 font-bold hidden sm:inline text-[11px]">Model AI:</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="bg-transparent text-emerald-300 font-semibold text-xs focus:outline-hidden cursor-pointer border-none"
+                title="Chuỗi tự động chuyển đổi: gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> Offline Rules Engine"
+              >
+                <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash (Mặc định)</option>
+                <option value="gemini-3.8-flash" className="bg-slate-900 text-white">Gemini 3.8 Flash (Thế hệ mới)</option>
+                <option value="gemini-3.5-flash-lite" className="bg-slate-900 text-white">Gemini 3.5 Flash-Lite (Tốc độ)</option>
+                <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash (Dự phòng)</option>
+                <option value="offline-engine" className="bg-slate-900 text-white">Offline Rules Engine (0ms)</option>
+              </select>
+            </div>
+
+            <button
+              onClick={onClose}
+              type="button"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400"
+              aria-label="Đóng Trợ lý Gemini AI"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Live Context Strip: Active patient details */}
@@ -367,13 +401,20 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
 
               {/* Action Toolbar to apply advice or medications */}
               <div className="bg-white dark:bg-slate-900 p-4 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="text-slate-500 dark:text-slate-400">
-                  Nguồn dữ liệu:{' '}
-                  <strong className="text-slate-800 dark:text-slate-200 font-medium">
-                    {result.source === 'gemini'
-                      ? 'Mô hình Google Gemini (Tích hợp toàn bộ CSDL Phòng khám)'
-                      : 'Cơ sở Dữ liệu Lâm sàng Ngoại trú BS. Diệu'}
-                  </strong>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-slate-500 dark:text-slate-400">Phản hồi từ:</span>
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                    {result.model || selectedModel}
+                  </span>
+                  <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                    ⏱️ {result.latencyMs !== undefined ? `${result.latencyMs}ms` : '0ms'}
+                  </span>
+                  {result.fallbackUsed && (
+                    <span className="font-semibold text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+                      <span>Auto-Fallback Chain kích hoạt</span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">

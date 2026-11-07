@@ -631,11 +631,11 @@ export const PrintableClinicPrescription: React.FC<PrintableClinicPrescriptionPr
                 <div />
               )}
 
-              {/* Optional VietQR Code on Prescription */}
-              {template.showPaymentQr && clinicInfo.bankAccountNo && (
+              {/* Optional Bank QR Code on Prescription */}
+              {template.showPaymentQr && (clinicInfo.bankQrImage || clinicInfo.bankAccountNo) && (
                 <div className={`text-center flex flex-col items-center justify-center ${isA5 ? 'w-28' : 'w-36'}`}>
                   <img
-                    src={generateVietQrUrl({
+                    src={clinicInfo.bankQrImage || generateVietQrUrl({
                       bankId: clinicInfo.bankId || 'VCB',
                       accountNo: clinicInfo.bankAccountNo || '',
                       accountName: clinicInfo.bankAccountName || clinicInfo.doctorName,
@@ -643,15 +643,17 @@ export const PrintableClinicPrescription: React.FC<PrintableClinicPrescriptionPr
                       content: prescription.prescriptionCode,
                       template: 'qr_only',
                     })}
-                    alt="VietQR Chuyển khoản"
-                    className={`${isA5 ? 'w-13 h-13' : 'w-20 h-20'} object-contain`}
+                    alt="Mã QR Chuyển khoản"
+                    className={`${isA5 ? 'max-h-16 w-auto' : 'max-h-24 w-auto'} object-contain`}
                   />
                   <span className={`font-mono text-slate-800 font-bold ${isA5 ? 'text-[5.5pt] leading-none mt-0.5' : 'text-[7.5pt]'}`}>
-                    Quét VietQR chuyển khoản
+                    Quét QR chuyển khoản
                   </span>
-                  <span className={`font-mono text-slate-600 ${isA5 ? 'text-[5pt] leading-none' : 'text-[7pt]'}`}>
-                    {clinicInfo.bankId || 'VCB'}: {clinicInfo.bankAccountNo}
-                  </span>
+                  {clinicInfo.bankAccountNo && (
+                    <span className={`font-mono text-slate-600 ${isA5 ? 'text-[5pt] leading-none' : 'text-[7pt]'}`}>
+                      {clinicInfo.bankId || 'VCB'}: {clinicInfo.bankAccountNo}
+                    </span>
+                  )}
                 </div>
               )}
 

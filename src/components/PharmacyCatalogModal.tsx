@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   Globe,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 
 export const getGoogleSearchUrl = (name: string, activeIngredient?: string): string => {
@@ -32,6 +33,12 @@ export const getGoogleSearchUrl = (name: string, activeIngredient?: string): str
 };
 import { lookupDrugFromPharmacopoeia } from '../utils/clinicalAi';
 import { EXPANDED_OUTPATIENT_MEDICATIONS } from '../data/expandedMedications';
+import { ESSENTIAL_CLINIC_DRUGS_150 } from '../data/essentialClinicDrugs150';
+import {
+  getDrugCanonicalKey,
+  isDuplicateDrug,
+  deduplicateDrugCatalog,
+} from '../utils/drugDeduplicator';
 import {
   CLINIC_CATEGORIES,
   ClinicCategory,
@@ -374,6 +381,85 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
     showToast(`✓ Đã chuẩn hóa thành công ${auditReport.misclassifiedAlerts.length} thuốc đúng nhóm dược lý!`);
   };
 
+  // 🧹 Quét & Lọc Trùng Kho Thuốc theo DrugDeduplicator
+  const handleScanAndDeduplicateCatalog = () => {
+    const { cleanCatalog, removedCount } = deduplicateDrugCatalog(catalog);
+    if (removedCount === 0) {
+      showToast(`✓ Kho thuốc đang có ${catalog.length} thuốc hoàn toàn sạch, không phát hiện thuốc trùng lặp nào!`);
+      return;
+    }
+
+    if (
+      !confirm(
+        `🧹 BỘ LỌC CHỐNG TRÙNG THUỐC (DrugDeduplicator) phát hiện ${removedCount} thuốc trùng lặp trong kho ${catalog.length} thuốc.\n\n` +
+        `Các thuốc trùng sẽ được tự động gộp (giữ lại bản ghi đầy đủ hoạt chất, hàm lượng, hướng dẫn và cảnh báo nhất).\n\n` +
+        `Bạn có chắc chắn muốn làm sạch và lưu ngay lên Supabase + Local Cache?`
+      )
+    ) {
+      return;
+    }
+
+    if (onBatchUpdateCatalog) {
+      onBatchUpdateCatalog(cleanCatalog);
+    }
+    showToast(`🧹 Đã quét & lọc sạch kho: Đã loại bỏ ${removedCount} thuốc trùng lặp, kho còn ${cleanCatalog.length} thuốc chuẩn hóa!`);
+  };
+
+  // ⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu Phòng Khám
+  const handleLoadEssential150Drugs = () => {
+    const existingBrandKeys = new Set<string>();
+    const existingInnKeys = new Set<string>();
+
+    catalog.forEach((item) => {
+      const { brandKey, innKey } = getDrugCanonicalKey(item);
+      if (brandKey) existingBrandKeys.add(brandKey);
+      if (innKey) existingInnKeys.add(innKey);
+    });
+
+    const newToAdd: MedicationCatalogItem[] = [];
+    let skippedCount = 0;
+
+    ESSENTIAL_CLINIC_DRUGS_150.forEach((item) => {
+      const { brandKey, innKey } = getDrugCanonicalKey(item);
+      const isDuplicate =
+        (brandKey && existingBrandKeys.has(brandKey)) ||
+        (innKey && existingInnKeys.has(innKey)) ||
+        catalog.some((c) => isDuplicateDrug(c, item));
+
+      if (isDuplicate) {
+        skippedCount++;
+      } else {
+        newToAdd.push(item);
+        if (brandKey) existingBrandKeys.add(brandKey);
+        if (innKey) existingInnKeys.add(innKey);
+      }
+    });
+
+    if (newToAdd.length === 0) {
+      showToast(`✓ Toàn bộ ${ESSENTIAL_CLINIC_DRUGS_150.length} thuốc thiết yếu đã có sẵn trong kho phòng khám, không cần nạp thêm!`);
+      return;
+    }
+
+    if (
+      !confirm(
+        `⚡ XÁC NHẬN NẠP NHANH BỘ 150+ THUỐC THIẾT YẾU PHÒNG KHÁM:\n` +
+        `- Số thuốc MỚI sẽ nạp: +${newToAdd.length} thuốc (chuẩn 11 chuyên khoa, liều dùng, hướng dẫn)\n` +
+        `- Số thuốc trùng lặp đã tự động bỏ qua: ${skippedCount} thuốc\n\n` +
+        `Dữ liệu sẽ được nạp và lưu ngay lập tức lên Supabase + Local Cache với 1 cú nhấp chuột.`
+      )
+    ) {
+      return;
+    }
+
+    const merged = [...catalog, ...newToAdd];
+    const { cleanCatalog } = deduplicateDrugCatalog(merged);
+
+    if (onBatchUpdateCatalog) {
+      onBatchUpdateCatalog(cleanCatalog);
+    }
+    showToast(`⚡ Đã nạp thành công +${newToAdd.length} thuốc thiết yếu (bỏ qua ${skippedCount} thuốc trùng)! Kho hiện có ${cleanCatalog.length} thuốc.`);
+  };
+
   // Load 44+ essential outpatient drugs
   const handleLoadFullOutpatientPack = () => {
     if (
@@ -600,14 +686,36 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
               {/* Quick Actions Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-md border border-slate-200/80 dark:border-slate-800">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Nút ⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu */}
+                  <button
+                    onClick={handleLoadEssential150Drugs}
+                    type="button"
+                    className="min-h-[40px] px-3.5 py-2 bg-gradient-to-r from-amber-600 via-emerald-700 to-teal-700 hover:from-amber-700 hover:to-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-amber-600 cursor-pointer animate-pulse-subtle"
+                    title="Nạp nhanh 150+ biệt dược thiết yếu theo 11 chuyên khoa, tự động đối chiếu chống trùng"
+                  >
+                    <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                    <span>⚡ Nạp Nhanh Bộ 150+ Thuốc Thiết Yếu</span>
+                  </button>
+
+                  {/* Nút 🧹 Quét & Lọc Trùng Kho Thuốc */}
+                  <button
+                    onClick={handleScanAndDeduplicateCatalog}
+                    type="button"
+                    className="min-h-[40px] px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-emerald-700 cursor-pointer"
+                    title="Chuẩn hóa Tên biệt dược, Hoạt chất INN và Hàm lượng để loại bỏ trùng lặp tuyệt đối"
+                  >
+                    <span className="text-sm">🧹</span>
+                    <span>Quét &amp; Lọc Trùng Kho Thuốc</span>
+                  </button>
+
                   <button
                     onClick={handleLoadFullOutpatientPack}
                     type="button"
-                    className="min-h-[40px] px-3.5 py-2 bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors border border-emerald-700 cursor-pointer"
+                    className="min-h-[40px] px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     title="Nạp ngay 44+ thuốc thông dụng chuẩn Dược Thư Việt Nam"
                   >
-                    <Database className="w-4 h-4 text-emerald-200" />
-                    <span>Nạp Bộ 44+ Thuốc Chuẩn</span>
+                    <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Nạp Bộ 44+ Thuốc</span>
                   </button>
 
                   <button

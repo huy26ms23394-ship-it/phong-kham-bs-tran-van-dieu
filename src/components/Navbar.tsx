@@ -59,6 +59,8 @@ interface NavbarProps {
   pendingUsersCount?: number;
   onOpenUserApprovalModal?: () => void;
   onOpenChangePassword?: () => void;
+  currentAiModel?: string;
+  onAiModelChange?: (model: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -91,6 +93,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   pendingUsersCount = 0,
   onOpenUserApprovalModal,
   onOpenChangePassword,
+  currentAiModel = 'gemini-3.5-flash',
+  onAiModelChange,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -418,22 +422,40 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               </div>
 
-              {/* Tool 3: Trợ Lý Gemini AI (F7) */}
-              <div className="relative group">
-                <button
-                  type="button"
-                  onClick={onOpenAiAssistant}
-                  aria-label="Trợ lý lâm sàng Gemini AI (F7)"
-                  className="h-8 w-8 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-md flex items-center justify-center transition-colors duration-150 border border-slate-200/90 dark:border-slate-700/80 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none cursor-pointer shadow-2xs"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500" aria-hidden="true" />
-                </button>
-                {/* Tooltip on hover */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-50 transition-all duration-150">
-                  <div className="bg-slate-900 text-white text-[11px] font-semibold py-1 px-2.5 rounded shadow-lg whitespace-nowrap border border-slate-700">
-                    Trợ Lý Lâm Sàng Gemini AI · Phím tắt: F7
+              {/* Tool 3: Trợ Lý Gemini AI (F7) & Model Selector */}
+              <div className="flex items-center gap-1">
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={onOpenAiAssistant}
+                    aria-label="Trợ lý lâm sàng Gemini AI (F7)"
+                    className="h-8 w-8 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-md flex items-center justify-center transition-colors duration-150 border border-slate-200/90 dark:border-slate-700/80 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none cursor-pointer shadow-2xs"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-500" aria-hidden="true" />
+                  </button>
+                  {/* Tooltip on hover */}
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-50 transition-all duration-150">
+                    <div className="bg-slate-900 text-white text-[11px] font-semibold py-1 px-2.5 rounded shadow-lg whitespace-nowrap border border-slate-700">
+                      Trợ Lý Lâm Sàng Gemini AI · Phím tắt: F7
+                    </div>
+                    <div className="w-2 h-1 border-x-4 border-x-transparent border-t-4 border-t-slate-900" />
                   </div>
-                  <div className="w-2 h-1 border-x-4 border-x-transparent border-t-4 border-t-slate-900" />
+                </div>
+
+                {/* Dropdown chọn nhanh Model AI trên thanh Header */}
+                <div className="hidden xl:flex items-center bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/80 rounded-md px-1.5 py-0.5 shadow-2xs h-8">
+                  <select
+                    value={currentAiModel}
+                    onChange={(e) => onAiModelChange?.(e.target.value)}
+                    className="bg-transparent text-slate-700 dark:text-slate-200 font-semibold text-[11px] focus:outline-hidden cursor-pointer border-none"
+                    title="Chuỗi ưu tiên: gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> Offline Rules Engine"
+                  >
+                    <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash (Chính)</option>
+                    <option value="gemini-3.8-flash" className="bg-slate-900 text-white">Gemini 3.8 Flash</option>
+                    <option value="gemini-3.5-flash-lite" className="bg-slate-900 text-white">Gemini 3.5 Flash-Lite</option>
+                    <option value="gemini-2.5-flash" className="bg-slate-900 text-white">Gemini 2.5 Flash</option>
+                    <option value="offline-engine" className="bg-slate-900 text-white">Offline Rules Engine (0ms)</option>
+                  </select>
                 </div>
               </div>
 

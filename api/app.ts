@@ -1,9 +1,9 @@
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import { crawlerService } from './crawlerService.js';
 import { dbService } from './databaseService.js';
 import { signToken, verifyToken, verifyMasterAdmin, hashPasswordWithSalt } from './authService.js';
+import { executeGeminiWithFallback, GEMINI_MODEL_CHAIN } from './geminiService.js';
 
 dotenv.config();
 
@@ -525,14 +525,9 @@ apiRouter.post('/ai/clinic-copilot', authMiddleware, async (req, res) => {
       vitals,
       diagnosis,
       symptoms,
+      model: preferredModel,
     } = req.body;
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(200).json({ text: null, reason: 'NO_API_KEY' });
-    }
-
-    const ai = new GoogleGenAI({});
     const anonymizedPatientCode = currentPatient?.patientCode || 'BN-NOI-BO';
     const patientAge = currentPatient?.birthYear
       ? new Date().getFullYear() - Number(currentPatient.birthYear)
@@ -570,20 +565,25 @@ Hành động: ${action}
 Nội dung: ${query || 'Phân tích dữ liệu lâm sàng toàn diện'}
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: contextPrompt,
-      config: {
-        systemInstruction:
-          'Bạn là Trợ lý AI Cố vấn Lâm sàng Cấp cao của Bác Sĩ Trần Văn Diệu tại Phòng Khám Nội Khoa BS. Diệu. ' +
-          'Nhiệm vụ: 1. Cảnh báo tương tác thuốc và chống chỉ định. ' +
-          '2. Ưu tiên gợi ý thuốc CÓ SẴN trong danh mục phòng khám. ' +
-          '3. Hỗ trợ tra cứu chẩn đoán phân biệt và phác đồ chuẩn Bộ Y Tế. ' +
-          'Trả lời bằng phong cách chuyên môn y khoa chính xác, súc tích, phân mục rõ ràng.',
-      },
+    const result = await executeGeminiWithFallback({
+      prompt: contextPrompt,
+      preferredModel,
+      systemInstruction:
+        'Bạn là Trợ lý AI Cố vấn Lâm sàng Cấp cao của Bác Sĩ Trần Văn Diệu tại Phòng Khám Nội Khoa BS. Diệu. ' +
+        'Nhiệm vụ: 1. Cảnh báo tương tác thuốc và chống chỉ định. ' +
+        '2. Ưu tiên gợi ý thuốc CÓ SẴN trong danh mục phòng khám. ' +
+        '3. Hỗ trợ tra cứu chẩn đoán phân biệt và phác đồ chuẩn Bộ Y Tế. ' +
+        'Trả lời bằng phong cách chuyên môn y khoa chính xác, súc tích, phân mục rõ ràng.',
     });
 
-    res.json({ text: response.text });
+    res.json({
+      text: result.text,
+      model: result.model,
+      latencyMs: result.latencyMs,
+      fallbackUsed: result.fallbackUsed,
+      attemptedModels: result.attemptedModels,
+      error: result.error,
+    });
   } catch (err: unknown) {
     console.error('Gemini Copilot API error:', err);
     res.status(200).json({ text: null, error: (err as Error).message });
@@ -593,14 +593,8 @@ Nội dung: ${query || 'Phân tích dữ liệu lâm sàng toàn diện'}
 // AI Assistant Legacy
 apiRouter.post('/ai/assistant', async (req, res) => {
   try {
-    const { action, diagnosis, symptoms, patientName, patientAge, allergies, medications, question } = req.body;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const { action, diagnosis, symptoms, patientName, patientAge, allergies, medications, question, model: preferredModel } = req.body;
 
-    if (!apiKey) {
-      return res.status(200).json({ text: null, reason: 'NO_API_KEY' });
-    }
-
-    const ai = new GoogleGenAI({});
     let prompt = '';
     if (action === 'check_interactions') {
       prompt = `Kiểm tra tương tác thuốc cho Bác sĩ Trần Văn Diệu:\n- Danh sách thuốc: ${(medications || []).join(', ')}\n- Bệnh nhân: ${patientName || 'Bệnh nhân'} (${patientAge || 60} tuổi)\n- Tiền sử dị ứng: ${(allergies || []).join(', ')}\n- Chẩn đoán: ${diagnosis || 'Chưa rõ'}\nHãy phân tích tương tác đối kháng, chống chỉ định và hướng dẫn liều dùng.`;
@@ -610,15 +604,21 @@ apiRouter.post('/ai/assistant', async (req, res) => {
       prompt = `Bác Sĩ Trần Văn Diệu hỏi: ${question || 'Hướng dẫn dược lý lâm sàng'}`;
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: 'Bạn là Trợ lý AI Y Khoa đắc lực của Bác Sĩ Trần Văn Diệu tại Phòng Khám BS. Diệu. Trả lời bằng tiếng Việt y khoa chuẩn mực, súc tích.',
-      },
+    const result = await executeGeminiWithFallback({
+      prompt,
+      preferredModel,
+      systemInstruction:
+        'Bạn là Trợ lý AI Y Khoa đắc lực của Bác Sĩ Trần Văn Diệu tại Phòng Khám BS. Diệu. Trả lời bằng tiếng Việt y khoa chuẩn mực, súc tích.',
     });
 
-    res.json({ text: response.text });
+    res.json({
+      text: result.text,
+      model: result.model,
+      latencyMs: result.latencyMs,
+      fallbackUsed: result.fallbackUsed,
+      attemptedModels: result.attemptedModels,
+      error: result.error,
+    });
   } catch (err: unknown) {
     res.status(200).json({ text: null, error: (err as Error).message });
   }
@@ -627,17 +627,11 @@ apiRouter.post('/ai/assistant', async (req, res) => {
 // Tra cứu thuốc theo Dược Thư
 apiRouter.post('/ai/lookup-drug', authMiddleware, async (req, res) => {
   try {
-    const { drugName } = req.body;
+    const { drugName, model: preferredModel } = req.body;
     if (!drugName || typeof drugName !== 'string') {
       return res.status(400).json({ error: 'Missing drugName' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(200).json({ data: null, reason: 'NO_API_KEY' });
-    }
-
-    const ai = new GoogleGenAI({});
     const prompt = `Tra cứu thông tin biệt dược lâm sàng "${drugName}" theo Dược Thư Quốc Gia Việt Nam.
 Trả về DUY NHẤT một chuỗi JSON hợp lệ:
 {
@@ -653,21 +647,56 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ:
   "warningNote": "Lưu ý an toàn"
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { responseMimeType: 'application/json', temperature: 0.1 },
+    const result = await executeGeminiWithFallback({
+      prompt,
+      preferredModel,
+      jsonMode: true,
+      temperature: 0.1,
     });
 
+    if (!result.success || !result.text) {
+      return res.status(200).json({
+        data: null,
+        model: result.model,
+        latencyMs: result.latencyMs,
+        reason: result.error || 'AI_UNAVAILABLE',
+      });
+    }
+
     try {
-      const parsed = JSON.parse(response.text || '{}');
-      return res.json({ data: parsed });
+      const parsed = JSON.parse(result.text || '{}');
+      return res.json({
+        data: parsed,
+        model: result.model,
+        latencyMs: result.latencyMs,
+        fallbackUsed: result.fallbackUsed,
+      });
     } catch {
-      return res.json({ data: null, rawText: response.text });
+      return res.json({
+        data: null,
+        rawText: result.text,
+        model: result.model,
+        latencyMs: result.latencyMs,
+      });
     }
   } catch (err: unknown) {
     res.status(200).json({ data: null, error: (err as Error).message });
   }
+});
+
+// Danh sách Model AI hỗ trợ
+apiRouter.get('/ai/models', (_req, res) => {
+  res.json({
+    success: true,
+    defaultModel: GEMINI_MODEL_CHAIN[0],
+    models: [
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', tag: 'Mặc định chính (Khuyên dùng)', default: true },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', tag: 'Thế hệ mới 3.8' },
+      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', tag: 'Tốc độ cực nhanh' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', tag: 'Dự phòng ổn định' },
+      { id: 'offline-engine', name: 'Offline Clinical Engine', tag: 'Quy tắc lâm sàng 0ms' },
+    ],
+  });
 });
 
 // Crawler Bot APIs
@@ -700,8 +729,15 @@ apiRouter.post('/crawler/settings', (req, res) => {
 
 apiRouter.post('/crawler/run', async (req, res) => {
   try {
-    const { clinicCatalogNames } = req.body || {};
-    const result = await crawlerService.runCrawl('manual', clinicCatalogNames || []);
+    const { clinicCatalogNames, category, keyword, exclusionList, model } = req.body || {};
+    const result = await crawlerService.runCrawl(
+      'manual',
+      clinicCatalogNames || [],
+      category,
+      keyword,
+      exclusionList,
+      model
+    );
     res.json({ success: true, ...result });
   } catch (err: unknown) {
     res.status(400).json({ success: false, error: (err as Error).message });

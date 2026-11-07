@@ -69,14 +69,29 @@ export async function saveCrawlerSettings(settings: Partial<CrawlerSettings>): P
   }
 }
 
+export interface TriggerCrawlOptions {
+  clinicCatalogNames?: string[];
+  category?: string;
+  keyword?: string;
+  exclusionList?: string[];
+  model?: string;
+}
+
 export async function triggerCrawlerRun(
-  clinicCatalogNames: string[] = []
+  optionsOrNames: string[] | TriggerCrawlOptions = []
 ): Promise<{ added: number; skipped: number; totalPending: number }> {
+  let bodyPayload: TriggerCrawlOptions = {};
+  if (Array.isArray(optionsOrNames)) {
+    bodyPayload = { clinicCatalogNames: optionsOrNames };
+  } else {
+    bodyPayload = optionsOrNames;
+  }
+
   const res = await fetchWithTimeout('/api/crawler/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ clinicCatalogNames }),
-  }, 7500);
+    body: JSON.stringify(bodyPayload),
+  }, 10000);
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

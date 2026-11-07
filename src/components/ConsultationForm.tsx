@@ -69,13 +69,14 @@ import { PrescriptionReviewModal } from './PrescriptionReviewModal';
 import { getGoogleSearchUrl } from './PharmacyCatalogModal';
 import { DrugDetailPopover } from './DrugDetailPopover';
 import { PatientTrendChartModal } from './PatientTrendChartModal';
-import { CashierPaymentModal } from './CashierPaymentModal';
+import { BankQrModal } from './BankQrModal';
 import { runComprehensiveLocalSafetyCheck, ClinicalRuleAlert } from '../utils/clinicalRules';
 
 interface ConsultationFormProps {
   patients: Patient[];
   selectedPatientId?: string;
   clinicInfo: ClinicSettings;
+  onUpdateClinicSettings?: (settings: ClinicSettings) => void;
   catalog?: MedicationCatalogItem[];
   prescriptions?: Prescription[];
   presetPrescription?: Prescription | null;
@@ -108,6 +109,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
   patients,
   selectedPatientId,
   clinicInfo,
+  onUpdateClinicSettings,
   catalog = CLINIC_MEDICATION_CATALOG,
   prescriptions = [],
   presetPrescription,
@@ -237,9 +239,9 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
     });
   }, [medications, selectedPatient, bpSystolic, bpDiastolic, heartRate, temperature]);
 
-  // Modals: Trend Chart & Cashier Payment
+  // Modals: Trend Chart & Bank QR Modal
   const [isTrendModalOpen, setIsTrendModalOpen] = useState(false);
-  const [isCashierModalOpen, setIsCashierModalOpen] = useState(false);
+  const [isBankQrModalOpen, setIsBankQrModalOpen] = useState(false);
 
   // Ghi Chú Xét Nghiệm & Cận Lâm Sàng (VD: Trung Tâm 548 / Medic)
   const [hasLabReferral, setHasLabReferral] = useState<boolean>(false);
@@ -1999,15 +2001,15 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
 
             {/* Actions Bar */}
             <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-wrap justify-end items-center gap-3">
-              {/* Nút Thu Phí & VietQR */}
+              {/* Nút Mã QR Ngân Hàng */}
               <button
                 type="button"
-                onClick={() => setIsCashierModalOpen(true)}
+                onClick={() => setIsBankQrModalOpen(true)}
                 className="min-h-[44px] px-4 py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold rounded-md text-xs flex items-center gap-2 shadow-xs transition-all border border-blue-600/50 dark:border-blue-500/50 active:scale-98 cursor-pointer"
-                title="Tính tiền khám, tiền thuốc và mở mã QR VietQR chuyển khoản ngân hàng"
+                title="Mở mã QR ngân hàng để bệnh nhân quét chuyển khoản (hỗ trợ tải ảnh và cắt theo tỉ lệ 3:4)"
               >
                 <QrCode className="w-4 h-4 text-blue-700 dark:text-blue-400" />
-                <span>Thu Phí (VietQR)</span>
+                <span>Mã QR Ngân Hàng</span>
               </button>
 
               <button
@@ -2223,18 +2225,14 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
         currentDraftMedications={medications}
       />
 
-      {/* Phân hệ 5: Thu Phí Khám & Quét Mã VietQR Napas 247 */}
-      <CashierPaymentModal
-        isOpen={isCashierModalOpen}
-        onClose={() => setIsCashierModalOpen(false)}
+      {/* Modal hiển thị Mã QR Ngân Hàng & Tải ảnh cắt tỉ lệ 3:4 */}
+      <BankQrModal
+        isOpen={isBankQrModalOpen}
+        onClose={() => setIsBankQrModalOpen(false)}
         clinicInfo={clinicInfo}
-        catalog={catalog}
+        onUpdateClinicSettings={onUpdateClinicSettings}
         patientName={selectedPatient?.fullName || 'Bệnh nhân'}
         prescriptionCode={draftPrescription?.prescriptionCode || generatePrescriptionCode()}
-        medications={medications}
-        onConfirmPaid={(amount, method) => {
-          setToastMessage(`Đã thu ${amount.toLocaleString('vi-VN')} đ (${method === 'transfer' ? 'Chuyển khoản VietQR' : 'Tiền mặt'}) thành công!`);
-        }}
       />
     </div>
   );

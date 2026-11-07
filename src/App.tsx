@@ -131,6 +131,22 @@ export default function App() {
     return CLINIC_MEDICATION_CATALOG;
   });
 
+  // Preferred AI Model (gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> offline)
+  const [preferredAiModel, setPreferredAiModel] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mediba_preferred_ai_model') || 'gemini-3.5-flash';
+    } catch {
+      return 'gemini-3.5-flash';
+    }
+  });
+
+  const handleAiModelChange = (model: string) => {
+    setPreferredAiModel(model);
+    try {
+      localStorage.setItem('mediba_preferred_ai_model', model);
+    } catch {}
+  };
+
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
@@ -821,6 +837,8 @@ export default function App() {
           pendingUsersCount={pendingUsersCount}
           onOpenUserApprovalModal={() => setIsUserApprovalModalOpen(true)}
           onOpenChangePassword={() => setIsChangePasswordModalOpen(true)}
+          currentAiModel={preferredAiModel}
+          onAiModelChange={handleAiModelChange}
           onGoogleLogin={() => {}}
           onGoogleLogout={() => {
             clearSession();
@@ -835,6 +853,7 @@ export default function App() {
               patients={patients}
               selectedPatientId={selectedPatientForExamId}
               clinicInfo={clinicInfo}
+              onUpdateClinicSettings={(newSettings) => setClinicInfo(newSettings)}
               catalog={pharmacyCatalog}
               prescriptions={prescriptions}
               presetPrescription={presetPrescription}
@@ -1031,7 +1050,10 @@ export default function App() {
         onClose={() => setIsPharmacyModalOpen(false)}
         catalog={pharmacyCatalog}
         onAddCatalogItem={handleAddCatalogItem}
-        onBatchUpdateCatalog={(items) => setPharmacyCatalog(items)}
+        onBatchUpdateCatalog={(items) => {
+          setPharmacyCatalog(items);
+          pushStateToLanServer({ pharmacyCatalog: items });
+        }}
         onOpenCrawlerBot={() => setIsCrawlerBotOpen(true)}
       />
 
@@ -1039,7 +1061,11 @@ export default function App() {
         isOpen={isCrawlerBotOpen}
         onClose={() => setIsCrawlerBotOpen(false)}
         clinicCatalog={pharmacyCatalog}
-        onAddApprovedDrugs={handleAddApprovedDrugs}
+        onAddApprovedDrugs={(newDrugs) => {
+          handleAddApprovedDrugs(newDrugs);
+          const updated = [...pharmacyCatalog, ...newDrugs];
+          pushStateToLanServer({ pharmacyCatalog: updated });
+        }}
       />
 
       <ClinicSettingsModal

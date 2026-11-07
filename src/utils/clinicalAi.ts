@@ -8,6 +8,9 @@ export type { ClinicalRuleAlert };
 export interface ClinicalAiResponse {
   text: string;
   source: 'gemini' | 'clinical_knowledge_base';
+  model?: string;
+  latencyMs?: number;
+  fallbackUsed?: boolean;
 }
 
 export interface CopilotPayload {
@@ -26,11 +29,13 @@ export interface CopilotPayload {
   diagnosis?: string;
   symptoms?: string;
   query?: string;
+  model?: string;
 }
 
 export async function queryClinicCopilotWithFullContext(
   payload: CopilotPayload
 ): Promise<ClinicalAiResponse> {
+  const callStartMs = Date.now();
   try {
     const catalogSummary = (payload.pharmacyCatalog || [])
       .slice(0, 44)
@@ -38,7 +43,7 @@ export async function queryClinicCopilotWithFullContext(
       .join('\n');
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 9500);
 
     // Anonymize PII before sending to external cloud AI (Nghị định 13/2023/NĐ-CP & HIPAA Safe Harbor)
     const anonymizedPatient = payload.currentPatient
@@ -67,6 +72,7 @@ export async function queryClinicCopilotWithFullContext(
         vitals: payload.vitals,
         diagnosis: payload.diagnosis,
         symptoms: payload.symptoms,
+        model: payload.model,
       }),
       signal: controller.signal,
     });
@@ -75,17 +81,26 @@ export async function queryClinicCopilotWithFullContext(
     if (response.ok) {
       const data = await response.json();
       if (data.text) {
-        return { text: data.text, source: 'gemini' };
+        return {
+          text: data.text,
+          source: 'gemini',
+          model: data.model || 'gemini-3.5-flash',
+          latencyMs: data.latencyMs ?? (Date.now() - callStartMs),
+          fallbackUsed: Boolean(data.fallbackUsed),
+        };
       }
     }
   } catch (err) {
     console.warn('Gemini Copilot network/server error, using offline clinical intelligence:', err);
   }
 
-  // High-fidelity fallback
+  // High-fidelity fallback (0ms latency for offline rules engine)
   return {
     text: generateRichCopilotFallback(payload),
     source: 'clinical_knowledge_base',
+    model: 'Offline Clinical Rules Engine',
+    latencyMs: 0,
+    fallbackUsed: true,
   };
 }
 
@@ -292,9 +307,11 @@ function generateLocalClinicalInsight(
 /**
  * Look up drug details from National Drug Database via Gemini AI with offline database fallback
  */
-export async function lookupDrugFromPharmacopoeia(drugName: string): Promise<{
+export async function lookupDrugFromPharmacopoeia(drugName: string, model?: string): Promise<{
   data: Partial<import('../types/medical').MedicationCatalogItem> | null;
   source: 'gemini_pharmacopoeia' | 'offline_database';
+  model?: string;
+  latencyMs?: number;
 }> {
   if (!drugName.trim()) {
     return { data: null, source: 'offline_database' };
@@ -303,12 +320,12 @@ export async function lookupDrugFromPharmacopoeia(drugName: string): Promise<{
   // 1. Try server API with Gemini AI
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch('/api/ai/lookup-drug', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ drugName }),
+      body: JSON.stringify({ drugName, model }),
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -316,7 +333,12 @@ export async function lookupDrugFromPharmacopoeia(drugName: string): Promise<{
     if (res.ok) {
       const json = await res.json();
       if (json.data && json.data.name) {
-        return { data: json.data, source: 'gemini_pharmacopoeia' };
+        return {
+          data: json.data,
+          source: 'gemini_pharmacopoeia',
+          model: json.model || 'gemini-3.5-flash',
+          latencyMs: json.latencyMs,
+        };
       }
     }
   } catch (err) {
@@ -333,9 +355,9 @@ export async function lookupDrugFromPharmacopoeia(drugName: string): Promise<{
         (m.activeIngredient && m.activeIngredient.toLowerCase().includes(q))
     );
     if (found) {
-      return { data: found, source: 'offline_database' };
+      return { data: found, source: 'offline_database', model: 'Offline Database', latencyMs: 0 };
     }
   } catch {}
 
-  return { data: null, source: 'offline_database' };
+  return { data: null, source: 'offline_database', model: 'Offline Database', latencyMs: 0 };
 }
