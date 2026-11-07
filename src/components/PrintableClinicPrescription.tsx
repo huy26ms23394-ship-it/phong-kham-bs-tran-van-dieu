@@ -139,6 +139,7 @@ export const PrintableClinicPrescription: React.FC<PrintableClinicPrescriptionPr
         onPrintNow={handlePrintNow}
         onLoadSampleAndPrint={handleLoadSampleAndPrint}
         isSampleActive={isSampleActive}
+        onClose={onClose}
       />
 
       {/* Header phụ: Chọn đơn thuốc khác nếu có nhiều đơn trong ngày */}

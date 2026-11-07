@@ -19,6 +19,7 @@ import {
   Layers,
   Calendar,
   Layers3,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface PrescriptionPrintTemplateSelectorProps {
@@ -29,6 +30,7 @@ interface PrescriptionPrintTemplateSelectorProps {
   onPrintNow: () => void;
   onLoadSampleAndPrint: () => void;
   isSampleActive?: boolean;
+  onClose?: () => void;
 }
 
 export const PrescriptionPrintTemplateSelector: React.FC<PrescriptionPrintTemplateSelectorProps> = ({
@@ -39,6 +41,7 @@ export const PrescriptionPrintTemplateSelector: React.FC<PrescriptionPrintTempla
   onPrintNow,
   onLoadSampleAndPrint,
   isSampleActive = false,
+  onClose,
 }) => {
   const [showCalibrationDrawer, setShowCalibrationDrawer] = useState(false);
 
@@ -75,6 +78,18 @@ export const PrescriptionPrintTemplateSelector: React.FC<PrescriptionPrintTempla
 
         {/* Action Buttons: Test Print & Print Now */}
         <div className="flex flex-wrap items-center gap-2">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              title="Quay lại danh sách đơn thuốc"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Quay Lại</span>
+            </button>
+          )}
+
           {/* Nút In Thử Mẫu A5 */}
           <button
             type="button"

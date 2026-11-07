@@ -136,19 +136,22 @@ export const TraditionalA5Template: React.FC<TraditionalA5TemplateProps> = ({
           </span>
         </div>
 
-        {/* Dòng 4: Huyết áp + Tần số tim (Căn sang phải) */}
-        <div className="flex justify-end items-baseline gap-4 pt-0.5 text-[8.5pt]">
-          <div className="flex items-baseline">
-            <span className={`font-semibold ${staticClass}`}>H.A:&nbsp;</span>
-            <span className="font-mono font-bold border-b border-dotted border-black min-w-[70px] text-center">
-              {bpText ? `${bpText} mmHg` : '......................'}
-            </span>
-          </div>
-          <div className="flex items-baseline">
-            <span className={`font-semibold ${staticClass}`}>Tần số tim:&nbsp;</span>
-            <span className="font-mono font-bold border-b border-dotted border-black min-w-[55px] text-center">
-              {hrText ? `${hrText} l/p` : '................'}
-            </span>
+        {/* Dòng 4: Đường chấm bên trái + Huyết áp & Tần số tim căn sang phải */}
+        <div className="flex items-baseline text-[8.5pt] pt-0.5">
+          <div className={`border-b border-dotted border-black flex-1 h-3 mr-4 ${staticBorder}`} />
+          <div className="flex items-baseline gap-4 shrink-0">
+            <div className="flex items-baseline">
+              <span className={`font-semibold ${staticClass}`}>H.A:&nbsp;</span>
+              <span className="font-mono font-bold border-b border-dotted border-black min-w-[70px] text-center">
+                {bpText ? `${bpText} mmHg` : '......................'}
+              </span>
+            </div>
+            <div className="flex items-baseline">
+              <span className={`font-semibold ${staticClass}`}>Tần số tim:&nbsp;</span>
+              <span className="font-mono font-bold border-b border-dotted border-black min-w-[55px] text-center">
+                {hrText ? `${hrText} l/p` : '................'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

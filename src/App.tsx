@@ -920,6 +920,7 @@ export default function App() {
               clinicInfo={clinicInfo}
               allPrescriptions={prescriptions}
               onSelectPrescription={(rx) => setCurrentPrintPrescription(rx)}
+              onClose={() => setActiveTab('prescriptions')}
             />
           )}
         </main>
