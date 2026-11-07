@@ -177,7 +177,7 @@ html.dark .custom-scrollbar {
 @media print {
   @page {
     size: A5 portrait;
-    margin: 4mm 5mm;
+    margin: 0mm;
   }
 
   /* Ẩn triệt để tất cả các thành phần giao diện không liên quan */
@@ -190,9 +190,10 @@ html.dark .custom-scrollbar {
   select,
   textarea,
   .print-hidden,
-  .fixed,
   aside,
-  [role="dialog"] {
+  .toast,
+  .fixed:not(:has(#printable-prescription-area)),
+  [role="dialog"]:not(:has(#printable-prescription-area)) {
     display: none !important;
     visibility: hidden !important;
   }
@@ -202,8 +203,7 @@ html.dark .custom-scrollbar {
   body,
   #root,
   #root > div,
-  main,
-  div {
+  main {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
@@ -216,7 +216,6 @@ html.dark .custom-scrollbar {
     min-height: 0 !important;
     overflow: visible !important;
     box-shadow: none !important;
-    border: none !important;
   }
 
   * {
@@ -225,47 +224,35 @@ html.dark .custom-scrollbar {
     color-scheme: light !important;
   }
 
-  .print-sheet,
-  .print-sheet *,
-  .prescription-print-sheet,
-  .prescription-print-sheet * {
-    font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-  }
-
-  /* Toa thuốc in: Không padding thừa, không viền ngoài, vừa khít khổ giấy A5 */
-  .print-sheet,
-  .prescription-print-sheet {
-    box-shadow: none !important;
-    border: none !important;
+  #printable-prescription-area {
+    display: block !important;
+    visibility: visible !important;
+    position: relative !important;
     margin: 0 auto !important;
     padding: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #printable-prescription-area * {
+    visibility: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-family: 'Times New Roman', Times, 'Liberation Serif', serif;
+  }
+
+  .traditional-a5-sheet,
+  .modern-byt-sheet,
+  .reminder-icons-sheet,
+  .print-sheet {
+    box-shadow: none !important;
+    margin: 0 auto !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
-    display: block !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-  }
-
-  /* Định dạng chuyên biệt khổ A5 (138mm rộng, tối đa 200mm cao để trọn 1 trang) */
-  .prescription-a5-sheet {
-    width: 138mm !important;
-    max-width: 138mm !important;
-    padding: 0 !important;
-    margin: 0 auto !important;
-    font-size: 8pt !important;
-    line-height: 1.25 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  /* Chỉ ngắt trang khi có nhiều tờ (khi bác sĩ chọn in kèm bảng dán tủ lạnh) */
-  .print-sheet:not(:last-child),
-  .page-break {
-    page-break-after: always !important;
-    break-after: page !important;
   }
 
   /* Tránh ngắt dòng trong hàng của bảng thuốc */

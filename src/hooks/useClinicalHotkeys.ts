@@ -263,6 +263,14 @@ export function useClinicalHotkeys({
       if (e.key === 'F9') {
         e.preventDefault();
         e.stopPropagation();
+        if (activeTab === 'consultation') {
+          window.dispatchEvent(new CustomEvent('clinic:save-and-print-rx'));
+          return;
+        }
+        if (activeTab === 'print') {
+          window.print();
+          return;
+        }
         modals.setIsReportsOpen((prev) => {
           const next = !prev;
           if (navigateTo) {

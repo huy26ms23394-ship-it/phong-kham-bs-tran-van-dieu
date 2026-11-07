@@ -320,6 +320,21 @@ export default function App() {
     });
   }, [prescriptions]);
 
+  // Lắng nghe lệnh in trực tiếp từ Modal Review (F9 / Ctrl + Enter / Nút In)
+  useEffect(() => {
+    const handlePrintDirect = (e: any) => {
+      if (e.detail) {
+        setCurrentPrintPrescription(e.detail);
+        setActiveTab('print');
+        setTimeout(() => {
+          window.print();
+        }, 280);
+      }
+    };
+    window.addEventListener('clinic:print-direct-rx', handlePrintDirect);
+    return () => window.removeEventListener('clinic:print-direct-rx', handlePrintDirect);
+  }, []);
+
   const hasHydratedLanRef = useRef(false);
   const isPullingLanRef = useRef(false);
   const lanSyncDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);

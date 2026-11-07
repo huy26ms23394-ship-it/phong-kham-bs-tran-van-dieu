@@ -129,11 +129,23 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        if (onSaveAndPrint) {
+          onSaveAndPrint();
+          onClose();
+        } else {
+          onClose();
+          window.dispatchEvent(new CustomEvent('clinic:print-direct-rx', { detail: prescription }));
+        }
       } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         if (onSaveAndPrint) {
           onSaveAndPrint();
           onClose();
+        } else {
+          onClose();
+          window.dispatchEvent(new CustomEvent('clinic:print-direct-rx', { detail: prescription }));
         }
       } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -167,7 +179,8 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
       onSaveAndPrint();
       onClose();
     } else {
-      window.print();
+      onClose();
+      window.dispatchEvent(new CustomEvent('clinic:print-direct-rx', { detail: prescription }));
     }
   };
 
