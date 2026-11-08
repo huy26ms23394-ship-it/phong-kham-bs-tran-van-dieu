@@ -23,3 +23,8 @@ server_data/crawler_store.json
 # System files
 .DS_Store
 Thumbs.db
+
+# Agent skill binaries & local harness
+.agent/
+.gemini/
+

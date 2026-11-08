@@ -306,7 +306,7 @@ export const GmailInboxModal: React.FC<GmailInboxModalProps> = ({
                     onClick={() => handleSelectMail(mail)}
                     className={`w-full text-left p-3.5 transition-colors flex flex-col gap-1.5 focus:outline-hidden ${
                       isSelected
-                        ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-l-4 border-emerald-800 dark:border-emerald-500'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 shadow-inner ring-1 ring-inset ring-emerald-500/40'
                         : mail.unread
                         ? 'bg-slate-50/80 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800/80'
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'

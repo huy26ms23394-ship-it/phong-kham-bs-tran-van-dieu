@@ -431,7 +431,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     aria-label="Trợ lý lâm sàng Gemini AI (F7)"
                     className="h-8 w-8 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-md flex items-center justify-center transition-colors duration-150 border border-slate-200/90 dark:border-slate-700/80 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:outline-none cursor-pointer shadow-2xs"
                   >
-                    <Sparkles className="w-4 h-4 text-amber-500" aria-hidden="true" />
+                    <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                   </button>
                   {/* Tooltip on hover */}
                   <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-50 transition-all duration-150">

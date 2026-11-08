@@ -105,7 +105,7 @@ export const PinLockModal: React.FC<PinLockModalProps> = ({
     <div className="fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
       <div
         className={`w-full max-w-xs sm:max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center transition-all duration-300 ${
-          isShaking ? 'animate-bounce' : ''
+          isShaking ? 'animate-shake' : ''
         }`}
       >
         {/* Clinic Icon Badge */}

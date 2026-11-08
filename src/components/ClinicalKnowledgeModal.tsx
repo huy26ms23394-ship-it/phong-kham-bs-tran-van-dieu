@@ -125,7 +125,7 @@ export const ClinicalKnowledgeModal: React.FC<ClinicalKnowledgeModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="p-3.5 rounded-md border-l-4 border-rose-600 bg-rose-50/60 dark:bg-rose-950/30 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-lg border border-rose-300 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20 space-y-1.5">
                   <h4 className="font-bold text-rose-950 dark:text-rose-200 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
                     🔴 TẦNG 1: Dị Ứng &amp; Dị Ứng Chéo
@@ -138,7 +138,7 @@ export const ClinicalKnowledgeModal: React.FC<ClinicalKnowledgeModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-md border-l-4 border-amber-500 bg-amber-50/60 dark:bg-amber-950/30 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-lg border border-amber-300 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 space-y-1.5">
                   <h4 className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                     🟠 TẦNG 2: Tương Tác Thuốc &amp; Trùng Hoạt Chất
@@ -151,7 +151,7 @@ export const ClinicalKnowledgeModal: React.FC<ClinicalKnowledgeModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-md border-l-4 border-yellow-500 bg-yellow-50/60 dark:bg-yellow-950/30 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-lg border border-yellow-300 dark:border-yellow-900/60 bg-yellow-50/70 dark:bg-yellow-950/20 space-y-1.5">
                   <h4 className="font-bold text-yellow-950 dark:text-yellow-200 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
                     🟡 TẦNG 3: Đối Soát Bệnh Nền &amp; Sinh Hiệu
@@ -164,7 +164,7 @@ export const ClinicalKnowledgeModal: React.FC<ClinicalKnowledgeModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-md border-l-4 border-blue-500 bg-blue-50/60 dark:bg-blue-950/30 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="p-3.5 rounded-lg border border-blue-300 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/20 space-y-1.5">
                   <h4 className="font-bold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
                     🔵 TẦNG 4: Liều Tối Đa 24h &amp; Thời Điểm
@@ -177,7 +177,7 @@ export const ClinicalKnowledgeModal: React.FC<ClinicalKnowledgeModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-md border-l-4 border-purple-500 bg-purple-50/60 dark:bg-purple-950/30 border border-slate-200 dark:border-slate-800 space-y-1.5 md:col-span-2">
+                <div className="p-3.5 rounded-lg border border-purple-300 dark:border-purple-900/60 bg-purple-50/70 dark:bg-purple-950/20 space-y-1.5 md:col-span-2">
                   <h4 className="font-bold text-purple-950 dark:text-purple-200 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
                     🟣 TẦNG 5: Lưu Ý Lâm Sàng &amp; Theo Dõi Cận Lâm Sàng

@@ -105,7 +105,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#090b10] text-slate-100 flex flex-col justify-between selection:bg-emerald-800 selection:text-white relative">
+    <div className="min-h-screen bg-[#090b10] text-white flex flex-col justify-between selection:bg-emerald-600 selection:text-white relative">
       {/* Subtle architectural grid background */}
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(to_right,#161b26_1px,transparent_1px),linear-gradient(to_bottom,#161b26_1px,transparent_1px)] bg-[size:32px_32px] opacity-40" />
 
@@ -211,7 +211,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
 
             {errorMessage && (
-              <div className="p-2.5 rounded-md bg-rose-950/70 border-l-2 border-rose-500 text-rose-200 text-xs font-medium">
+              <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-700/60 text-rose-200 text-xs font-medium">
                 {errorMessage}
               </div>
             )}

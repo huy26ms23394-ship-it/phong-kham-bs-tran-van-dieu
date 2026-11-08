@@ -371,12 +371,12 @@ export const PrescriptionReviewModal: React.FC<PrescriptionReviewModalProps> = (
                 <button
                   type="button"
                   onClick={handleCopyAndOpenGemini}
-                  className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border border-indigo-400/40"
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border border-emerald-500/40"
                   title="Sao chép toàn bộ bệnh án, sinh hiệu, chẩn đoán và đơn thuốc rồi mở Gemini cá nhân (Alt + G)"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                   <span>🚀 Mở Gemini Cá Nhân</span>
-                  <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-indigo-950/80 text-indigo-200 rounded font-bold border border-indigo-400/30">
+                  <kbd className="px-1.5 py-0.2 text-[9px] font-mono bg-emerald-950/80 text-emerald-200 rounded font-bold border border-emerald-400/30">
                     Alt+G
                   </kbd>
                 </button>

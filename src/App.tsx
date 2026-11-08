@@ -926,14 +926,14 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Gemini AI Quick Button (>=44px touch target) */}
+      {/* Floating Gemini AI Quick Button */}
       <button
         type="button"
         onClick={() => setIsAiAssistantOpen(true)}
-        className="no-print fixed bottom-20 lg:bottom-6 right-5 min-h-[44px] px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white rounded-md shadow-lg flex items-center gap-2 font-bold text-xs border border-emerald-600 dark:border-emerald-500 transition-colors duration-200 z-30 focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none cursor-pointer"
-        title="Trợ lý Gemini AI đọc toàn bộ hồ sơ phòng khám"
+        className="no-print fixed bottom-20 lg:bottom-6 right-5 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-sm border border-emerald-400/20 transition-all z-30 focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none cursor-pointer"
+        title="Trợ lý Gemini AI đọc toàn bộ hồ sơ phòng khám (F7)"
       >
-        <Sparkles className="w-4 h-4 text-amber-300 shrink-0" aria-hidden="true" />
+        <Sparkles className="w-4 h-4 text-emerald-100" aria-hidden="true" />
         <span>Trợ Lý Gemini AI</span>
       </button>
 

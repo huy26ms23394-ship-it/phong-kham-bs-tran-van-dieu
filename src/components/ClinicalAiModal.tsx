@@ -23,8 +23,6 @@ import {
   CheckCircle2,
   Stethoscope,
   BarChart3,
-  Database,
-  Plus,
   RefreshCw,
   Copy,
   Check,
@@ -107,10 +105,14 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
         e.preventDefault();
         handleCopyCaseAndOpenGemini();
       }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, patient, medications, vitals, diagnosis, symptoms]);
+  }, [isOpen, patient, medications, vitals, diagnosis, symptoms, onClose]);
 
   const handleModelChange = (newModel: string) => {
     setSelectedModel(newModel);
@@ -160,41 +162,45 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-md max-w-4xl w-full shadow-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden my-4 flex flex-col h-[90vh] transition-colors">
-        {/* Header: professional medical dark slate/emerald palette */}
-        <div className="bg-slate-900 dark:bg-slate-950 text-white px-5 py-4 flex items-center justify-between shrink-0 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-emerald-800 dark:bg-emerald-700 flex items-center justify-center text-emerald-200 border border-emerald-600 shadow-xs">
-              <Sparkles className="w-5 h-5 text-amber-300" />
+    <div
+      className="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clinical-copilot-title"
+    >
+      <div className="relative max-w-5xl w-[95vw] h-[85vh] flex flex-col bg-[#0b111a] border border-white/10 rounded-xl shadow-2xl overflow-hidden text-slate-200">
+        
+        {/* TẦNG 1: TOP FIXED HEADER (h-14, không bao giờ vỡ dòng) */}
+        <header className="h-14 px-5 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-[#0b111a]">
+          {/* Cụm Bên Trái */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <Sparkles className="w-4 h-4 text-emerald-400" aria-hidden="true" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                <h2 id="clinical-copilot-title" className="text-sm font-semibold text-white whitespace-nowrap">
                   Trợ Lý Lâm Sàng Gemini AI
                 </h2>
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-red-600/30 text-emerald-200 border border-emerald-500/40">
-                  Toàn Quyền Đọc CSDL Phòng Khám
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                  CSDL Phòng Khám: Đã kết nối
                 </span>
               </div>
-              <div className="text-xs text-slate-400 flex items-center gap-2">
-                <span>BS. Trần Văn Diệu</span>
-                <span>·</span>
-                <span>
-                  Đã kết nối {allPatients.length} hồ sơ BN · {catalog.length} biệt dược · {allPrescriptions.length} đơn thuốc
-                </span>
-              </div>
+              <p className="text-xs text-slate-400 truncate">
+                BS. Trần Văn Diệu • {allPatients.length} hồ sơ BN • {catalog.length} biệt dược • {allPrescriptions.length} đơn thuốc
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-            {/* Dropdown chọn Model AI Thế Hệ 3.5+ & Auto-Fallback */}
-            <div className="flex items-center gap-1.5 bg-slate-800/90 dark:bg-slate-900 border border-slate-700/80 rounded-md px-2.5 py-1 text-xs shadow-inner">
-              <span className="text-amber-300 font-bold hidden sm:inline text-[11px]">Model:</span>
+          {/* Cụm Bên Phải */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Dropdown chọn Model */}
+            <div className="flex items-center h-8 px-2.5 text-xs bg-slate-900 border border-white/10 rounded-md">
+              <span className="text-slate-400 mr-1.5 text-[11px] hidden sm:inline">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => handleModelChange(e.target.value)}
-                className="bg-transparent text-emerald-300 font-semibold text-xs focus:outline-hidden cursor-pointer border-none"
+                className="bg-transparent text-emerald-400 font-medium text-xs focus:outline-none cursor-pointer border-none py-0"
                 title="Chuỗi tự động chuyển đổi: gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> Offline Rules Engine"
               >
                 <option value="gemini-3.5-flash" className="bg-slate-900 text-white">Gemini 3.5 Flash</option>
@@ -205,183 +211,196 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               </select>
             </div>
 
-            {/* Nút 🚀 Mở Gemini Cá Nhân (Alt + G) */}
+            {/* Nút Kho Nguyên Tắc (1 icon) */}
+            <button
+              type="button"
+              onClick={() => setIsKnowledgeOpen(true)}
+              className="h-8 px-2.5 text-xs bg-slate-800/80 hover:bg-slate-800 text-slate-200 rounded-md border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Kho nguyên tắc 5 tầng CDS (0ms)"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
+              <span className="hidden sm:inline">Kho Nguyên Tắc</span>
+            </button>
+
+            {/* Nút Mở Gemini Cá Nhân (1 icon) */}
             <button
               type="button"
               onClick={handleCopyCaseAndOpenGemini}
-              className="px-2.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer border border-indigo-400/40"
+              className="h-8 px-2.5 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Sao chép toàn bộ bệnh án và mở Gemini Cá Nhân (Alt + G)"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span className="hidden sm:inline">🚀 Mở Gemini Cá Nhân</span>
-              <span className="sm:hidden">Gemini</span>
-              <kbd className="hidden md:inline px-1 py-0.2 text-[9px] font-mono bg-indigo-950/80 text-indigo-200 rounded">
+              <ExternalLink className="w-3.5 h-3.5 text-emerald-300" aria-hidden="true" />
+              <span className="hidden sm:inline">Mở Gemini Cá Nhân</span>
+              <kbd className="hidden md:inline px-1 py-0.2 text-[9px] font-mono bg-emerald-950/80 text-emerald-300 rounded border border-emerald-500/30 font-bold">
                 Alt+G
               </kbd>
             </button>
 
-            {/* Nút 📚 Kho Nguyên Tắc (0ms) */}
-            <button
-              type="button"
-              onClick={() => setIsKnowledgeOpen(true)}
-              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold flex items-center gap-1 transition-all border border-slate-700 cursor-pointer"
-              title="Mở kho tài liệu nguyên tắc lâm sàng 5 tầng"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-indigo-300" />
-              <span className="hidden sm:inline">📚 Kho Nguyên Tắc</span>
-            </button>
+            {/* Vạch ngăn cách dọc */}
+            <div className="h-5 w-px bg-white/10 mx-1" aria-hidden="true" />
 
+            {/* Nút Đóng Modal (nằm ngoài cùng bên phải) */}
             <button
               onClick={onClose}
               type="button"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-rose-400"
+              className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
               aria-label="Đóng Trợ lý Gemini AI"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Live Context Strip: Active patient details */}
-        <div className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-700 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400">Đang khám:</span>
-              <strong className="text-slate-900 dark:text-slate-100 font-bold">
-                {patient?.fullName || 'Chưa chọn BN'}
-              </strong>
-              {patient?.birthYear && (
-                <span className="text-slate-500 dark:text-slate-400 font-mono">
-                  ({new Date().getFullYear() - Number(patient.birthYear)} tuổi, {patient.gender === 'nam' ? 'Nam' : 'Nữ'})
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400">Huyết áp:</span>
-              <span className="font-mono font-bold text-slate-800 dark:text-slate-200 tabular-nums">
-                {vitals?.bloodPressure || '130/80'} mmHg
+        {/* TẦNG 2: THANH THÔNG TIN BỆNH NHÂN (Single-Line Patient Context Bar) */}
+        <div className="px-5 py-2.5 bg-slate-900/70 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          {/* Bên trái: Sinh hiệu & Chẩn đoán */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-slate-400">Đang khám:</span>
+            <strong className="text-white font-semibold">
+              {patient?.fullName || 'Chưa chọn BN'}
+            </strong>
+            {patient?.birthYear && (
+              <span className="text-slate-400 font-mono">
+                ({new Date().getFullYear() - Number(patient.birthYear)} tuổi, {patient.gender === 'nam' ? 'Nam' : 'Nữ'})
               </span>
-            </div>
+            )}
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 dark:text-slate-400">Chẩn đoán:</span>
-              <span className="font-semibold text-emerald-900 dark:text-emerald-300">
-                {diagnosis || 'Chưa nhập'}
+            <span className="text-slate-600" aria-hidden="true">•</span>
+
+            <span className="text-slate-400">HA:</span>
+            <strong className="font-mono tabular-nums text-white font-semibold">
+              {vitals?.bloodPressure || '130/80'} mmHg
+            </strong>
+
+            <span className="text-slate-600" aria-hidden="true">•</span>
+
+            <span className="text-slate-400">Chẩn đoán:</span>
+            <span className="text-emerald-400 font-medium">
+              {diagnosis || 'Chưa nhập chẩn đoán'}
+            </span>
+
+            <span className="text-slate-600" aria-hidden="true">•</span>
+
+            <span className="font-mono tabular-nums text-slate-300">
+              Kho thuốc: {catalog.length} thuốc
+            </span>
+          </div>
+
+          {/* Bên phải: Cảnh báo Dị ứng nổi bật (chỉ dùng màu đỏ Rose cho dị ứng thực sự) */}
+          <div className="shrink-0">
+            {patient?.allergies && patient.allergies.length > 0 && !patient.allergies[0].includes('Không có') ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 font-medium text-xs">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" aria-hidden="true" />
+                <span>⚠️ Dị ứng: {patient.allergies.join(', ')}</span>
               </span>
-            </div>
-
-            {patient?.allergies && patient.allergies.length > 0 && !patient.allergies[0].includes('Không có') && (
-              <span className="font-bold text-rose-700 dark:text-emerald-300 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
-                Dị ứng: {patient.allergies.join(', ')}
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/70" aria-hidden="true" />
+                <span>Chưa ghi nhận dị ứng</span>
               </span>
             )}
           </div>
-
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
-            <Database className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-            <span>Kho thuốc: {catalog.length} thuốc</span>
-          </div>
         </div>
 
-        {/* Minh Bạch Trí Tuệ Nhân Tạo (vn-law-check 07-ai-transparency) */}
-        <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800/60 px-5 py-2 flex items-center justify-between gap-3 text-[11px] text-amber-900 dark:text-amber-200 shrink-0">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>
-              <strong>Khuyến cáo pháp lý lâm sàng:</strong> Trí tuệ nhân tạo (Gemini AI) đóng vai trò hỗ trợ tham khảo. Bác sĩ kê đơn chịu trách nhiệm chuyên môn và pháp lý độc lập cuối cùng. Dữ liệu bệnh nhân đã được khử định danh tự động.
-            </span>
-          </div>
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-amber-200/60 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 whitespace-nowrap hidden sm:inline">
-            CDS Safe Harbor
-          </span>
-        </div>
-
-        {/* Sub-nav Tabs: Pure Lucide SVG icons, min 44px hit targets */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 px-4 py-2 flex items-center gap-1.5 overflow-x-auto text-xs shrink-0 custom-scrollbar">
+        {/* TẦNG 3: THANH 5 TAB CHỨC NĂNG (Compact Segmented Navigation) */}
+        <nav
+          className="px-5 bg-[#0b111a] border-b border-white/[0.08] flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0"
+          aria-label="Các chế độ phân tích lâm sàng"
+        >
+          {/* Tab 1 */}
           <button
+            type="button"
             onClick={() => {
               setActiveTab('full_review');
               handleRunAi('full_review');
             }}
-            className={`min-h-[44px] px-3.5 py-2 rounded-md font-bold flex items-center gap-2 transition-colors border ${
+            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'full_review'
-                ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-600 shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/80 dark:border-slate-700'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
-            <ShieldAlert className="w-4 h-4 text-amber-300" />
-            <span>Đánh Giá Toàn Diện &amp; Tương Tác ({medications.length} thuốc)</span>
+            <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Đánh Giá &amp; Tương Tác ({medications.length} thuốc)</span>
           </button>
 
+          {/* Tab 2 */}
           <button
+            type="button"
             onClick={() => {
               setActiveTab('suggest_rx');
               handleRunAi('suggest_rx');
             }}
-            className={`min-h-[44px] px-3.5 py-2 rounded-md font-bold flex items-center gap-2 transition-colors border ${
+            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'suggest_rx'
-                ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-600 shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/80 dark:border-slate-700'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
-            <BookOpen className="w-4 h-4 text-emerald-300" />
-            <span>Gợi Ý Thuốc Có Sẵn Trong Kho</span>
+            <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Gợi Ý Thuốc Trong Kho</span>
           </button>
 
+          {/* Tab 3 */}
           <button
+            type="button"
             onClick={() => {
               setActiveTab('diet');
               handleRunAi('diet');
             }}
-            className={`min-h-[44px] px-3.5 py-2 rounded-md font-bold flex items-center gap-2 transition-colors border ${
+            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'diet'
-                ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-600 shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/80 dark:border-slate-700'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
-            <Apple className="w-4 h-4 text-emerald-300" />
+            <Apple className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Soạn Lời Dặn Dinh Dưỡng</span>
           </button>
 
+          {/* Tab 4 */}
           <button
+            type="button"
             onClick={() => {
               setActiveTab('clinic_audit');
               handleRunAi('clinic_audit');
             }}
-            className={`min-h-[44px] px-3.5 py-2 rounded-md font-bold flex items-center gap-2 transition-colors border ${
+            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'clinic_audit'
-                ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-600 shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/80 dark:border-slate-700'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
-            <BarChart3 className="w-4 h-4 text-emerald-300" />
-            <span>Phân Tích Toàn Bộ Phòng Khám</span>
+            <BarChart3 className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Phân Tích Phòng Khám</span>
           </button>
 
+          {/* Tab 5 */}
           <button
+            type="button"
             onClick={() => {
               setActiveTab('chat');
               setResult(null);
             }}
-            className={`min-h-[44px] px-3.5 py-2 rounded-md font-bold flex items-center gap-2 transition-colors border ${
+            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'chat'
-                ? 'bg-emerald-800 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-600 shadow-xs'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200/80 dark:border-slate-700'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
-            <Stethoscope className="w-4 h-4 text-emerald-300" />
+            <Stethoscope className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Hỏi Đáp Y Khoa Chuyên Sâu</span>
           </button>
-        </div>
+        </nav>
 
-        {/* Content Area */}
-        <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4 bg-slate-50/50 dark:bg-slate-950/60">
-          {/* Quick Chat Input if on chat tab */}
+        {/* TẦNG 4: KHU VỰC NỘI DUNG CHÍNH (Scrollable Content Area) */}
+        <main className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-[#0b111a]/50">
+          
+          {/* Quick Chat Input nếu chọn tab 'chat' */}
           {activeTab === 'chat' && (
-            <div className="bg-white dark:bg-slate-900 p-4 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-2">
-              <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+            <div className="bg-slate-900/80 p-4 rounded-xl border border-white/10 shadow-sm space-y-2.5">
+              <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                 <span>Đặt câu hỏi lâm sàng dựa trên toàn bộ dữ liệu bệnh nhân và kho thuốc:</span>
               </div>
               <div className="flex gap-2">
@@ -394,84 +413,84 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
                       handleRunAi('chat', chatQuestion);
                     }
                   }}
-                  placeholder="VD: Kiểm tra xem bệnh nhân này có dùng được Amlor và Losartan cùng lúc không? Hoặc đề xuất phác đồ cho bệnh nhân đái tháo đường kèm suy thận..."
-                  className="flex-1 min-h-[44px] px-4 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-700"
+                  placeholder="VD: Bệnh nhân tăng huyết áp kèm suy thận nhẹ, có dùng được Amlor và Losartan cùng lúc không?..."
+                  className="flex-1 h-10 px-3.5 text-xs rounded-lg border border-white/15 bg-slate-950 text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
                 <button
                   type="button"
                   disabled={loading || !chatQuestion.trim()}
                   onClick={() => handleRunAi('chat', chatQuestion)}
-                  className="min-h-[44px] px-5 py-2 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white rounded-md text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-emerald-700 dark:border-emerald-500"
+                  className="h-10 px-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer shadow-sm"
                 >
-                  <Send className="w-3.5 h-3.5" />
+                  <Send className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Hỏi AI</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Loading Indicator */}
+          {/* Trạng thái đang tải (Loading) */}
           {loading && (
-            <div className="py-16 flex flex-col items-center justify-center text-slate-600 dark:text-slate-400 gap-3">
-              <Loader2 className="w-8 h-8 text-emerald-800 dark:text-emerald-400 animate-spin" />
+            <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
+              <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" aria-hidden="true" />
               <div className="text-center space-y-1">
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                  Gemini AI đang xử lý toàn bộ hồ sơ phòng khám...
+                <p className="text-sm font-semibold text-white">
+                  Gemini AI đang phân tích dữ liệu lâm sàng...
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-400">
                   Đối chiếu dược thư, tiền sử dị ứng, tương tác thuốc và danh mục kho thuốc
                 </p>
               </div>
             </div>
           )}
 
-          {/* Result View */}
+          {/* Trạng thái hiển thị kết quả phân tích */}
           {!loading && result && (
             <div className="space-y-4">
-              <div className="bg-white dark:bg-slate-900 p-5 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <div className="bg-slate-900/90 p-5 rounded-xl border border-white/10 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                  <span className="text-xs font-semibold text-white flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                     <span>Kết Quả Phân Tích Chuyên Môn Y Khoa</span>
                   </span>
 
                   <button
                     onClick={handleCopyResult}
                     type="button"
-                    className="min-h-[36px] px-3 py-1 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-md border border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1.5 transition-colors"
+                    className="h-7 px-2.5 text-xs text-slate-300 hover:text-white rounded-md border border-white/15 hover:bg-white/[0.08] flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     {copied ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Đã sao chép</span>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                        <span className="text-emerald-400 font-medium">Đã chép</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Sao chép kết quả</span>
+                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Sao chép</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                <div className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-line font-normal">
+                <div className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line font-normal">
                   {result.text}
                 </div>
               </div>
 
-              {/* Action Toolbar to apply advice or medications */}
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-md border border-slate-200/80 dark:border-slate-800 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+              {/* Action Toolbar to apply advice or refresh */}
+              <div className="bg-slate-900/60 p-3.5 rounded-xl border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500 dark:text-slate-400">Phản hồi từ:</span>
-                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+                  <span className="text-slate-400">Nguồn phản hồi:</span>
+                  <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
                     {result.model || selectedModel}
                   </span>
-                  <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                  <span className="font-mono text-[11px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-white/10">
                     ⏱️ {result.latencyMs !== undefined ? `${result.latencyMs}ms` : '0ms'}
                   </span>
                   {result.fallbackUsed && (
-                    <span className="font-semibold text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-700 flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+                    <span className="font-medium text-[11px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" aria-hidden="true" />
                       <span>Auto-Fallback Chain kích hoạt</span>
                     </span>
                   )}
@@ -485,19 +504,19 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
                         onApplyDietAdvice(String(result?.text || '').replace(/###/g, '').trim());
                         onClose();
                       }}
-                      className="min-h-[44px] px-4 py-2 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white rounded-md font-bold flex items-center gap-2 transition-colors border border-emerald-700 dark:border-emerald-500 shadow-2xs"
+                      className="h-8 px-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Áp Dụng Lời Dặn Này Vào Đơn Thuốc</span>
+                      <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Áp Dụng Lời Dặn Vào Đơn</span>
                     </button>
                   )}
 
                   <button
                     type="button"
                     onClick={() => handleRunAi(activeTab)}
-                    className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md font-semibold flex items-center gap-1.5 transition-colors border border-slate-200/80 dark:border-slate-700"
+                    className="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium text-xs flex items-center gap-1.5 transition-colors border border-white/10 cursor-pointer"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    <RefreshCw className="w-3 h-3" aria-hidden="true" />
                     <span>Phân tích lại</span>
                   </button>
                 </div>
@@ -505,34 +524,50 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
             </div>
           )}
 
-          {/* Initial State Helper */}
+          {/* Trạng thái chờ khởi chạy (Empty State) */}
           {!loading && !result && activeTab !== 'chat' && (
-            <div className="py-16 text-center text-slate-500 dark:text-slate-400 space-y-3">
-              <Sparkles className="w-10 h-10 text-emerald-800 dark:text-emerald-400 mx-auto" />
-              <div className="max-w-md mx-auto space-y-1">
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                  Sẵn Sàng Hỗ Trợ Bác Sĩ Trần Văn Diệu
+            <div className="py-16 text-center text-slate-400 space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mx-auto">
+                <Sparkles className="w-6 h-6 text-emerald-400" aria-hidden="true" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1.5">
+                <h4 className="text-sm font-semibold text-white">
+                  Sẵn Sàng Hỗ Trợ BS. Trần Văn Diệu
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-400 leading-relaxed">
                   Bấm nút bên dưới để Trợ lý Gemini AI đọc toàn bộ bệnh sử của{' '}
-                  <strong className="text-slate-800 dark:text-slate-200">{patient?.fullName || 'bệnh nhân'}</strong>,
-                  đối chiếu các thuốc trong đơn và kho dược 44+ thuốc phòng khám.
+                  <strong className="text-slate-200">{patient?.fullName || 'bệnh nhân'}</strong>,
+                  đối chiếu các thuốc trong đơn và kho dược {catalog.length}+ thuốc phòng khám.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => handleRunAi(activeTab)}
-                className="min-h-[44px] px-6 py-2.5 bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-bold rounded-md shadow-xs transition-colors border border-emerald-700 dark:border-emerald-500"
+                className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-lg shadow-lg shadow-emerald-950/50 inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
               >
-                Bắt Đầu Phân Tích Ngay
+                <span>⚡ Bắt Đầu Phân Tích Ngay</span>
               </button>
             </div>
           )}
-        </div>
+        </main>
+
+        {/* TẦNG 5: KHUYẾN CÁO PHÁP LÝ (CDS Safe Harbor Footer cố định ở đáy) */}
+        <footer className="px-5 py-2 bg-amber-950/20 border-t border-amber-500/20 flex items-center justify-between gap-3 shrink-0">
+          <div className="text-[11px] text-amber-200/80 flex items-center gap-2">
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
+            <span>
+              <strong>Khuyến cáo pháp lý lâm sàng:</strong> Gemini AI đóng vai trò hỗ trợ tham khảo. Bác sĩ kê đơn chịu trách nhiệm chuyên môn cuối cùng. Dữ liệu BN đã được khử định danh.
+            </span>
+          </div>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold whitespace-nowrap hidden sm:inline">
+            CDS Safe Harbor
+          </span>
+        </footer>
+
       </div>
 
-      {/* Clinical Knowledge & 5-Tier CDS Modal */}
+      {/* Modal Kho Tài Liệu Nguyên Tắc 5 Tầng CDS */}
       <ClinicalKnowledgeModal
         isOpen={isKnowledgeOpen}
         onClose={() => setIsKnowledgeOpen(false)}
