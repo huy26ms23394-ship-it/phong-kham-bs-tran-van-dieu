@@ -161,6 +161,14 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Khử lặp từ "Dị ứng: Dị ứng ..." nếu dữ liệu đã chứa chữ dị ứng
+  const cleanAllergyText = patient?.allergies
+    ? patient.allergies
+        .filter((a) => !a.toLowerCase().includes('không có'))
+        .map((a) => a.replace(/^(dị ứng|tiền sử dị ứng)\s*:?\s*/i, ''))
+        .join(', ')
+    : '';
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
@@ -171,32 +179,33 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
       <div className="relative max-w-5xl w-[95vw] h-[85vh] flex flex-col bg-[#0b111a] border border-white/10 rounded-xl shadow-2xl overflow-hidden text-slate-200">
         
         {/* TẦNG 1: TOP FIXED HEADER (h-14, không bao giờ vỡ dòng) */}
-        <header className="h-14 px-5 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-[#0b111a]">
-          {/* Cụm Bên Trái */}
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="h-14 px-4 sm:px-5 border-b border-white/[0.08] flex items-center justify-between gap-3 shrink-0 bg-[#0b111a]">
+          {/* Cụm Bên Trái (min-w-0, co giãn tự nhiên không đè sang bên phải) */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <Sparkles className="w-4 h-4 text-emerald-400" aria-hidden="true" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 id="clinical-copilot-title" className="text-sm font-semibold text-white whitespace-nowrap">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 id="clinical-copilot-title" className="text-sm font-semibold text-white truncate">
                   Trợ Lý Lâm Sàng Gemini AI
                 </h2>
-                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
-                  CSDL Phòng Khám: Đã kết nối
+                <span className="hidden sm:inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>
+                  CSDL: Đã kết nối
                 </span>
               </div>
-              <p className="text-xs text-slate-400 truncate">
+              <p className="text-[11px] text-slate-400 truncate">
                 BS. Trần Văn Diệu • {allPatients.length} hồ sơ BN • {catalog.length} biệt dược • {allPrescriptions.length} đơn thuốc
               </p>
             </div>
           </div>
 
-          {/* Cụm Bên Phải */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Cụm Bên Phải (shrink-0, các nút được giữ khoảng cách chuẩn) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Dropdown chọn Model */}
-            <div className="flex items-center h-8 px-2.5 text-xs bg-slate-900 border border-white/10 rounded-md">
-              <span className="text-slate-400 mr-1.5 text-[11px] hidden sm:inline">Model:</span>
+            <div className="flex items-center h-8 px-2 text-xs bg-slate-900 border border-white/10 rounded-md">
+              <span className="text-slate-400 mr-1 text-[11px] hidden md:inline">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => handleModelChange(e.target.value)}
@@ -219,7 +228,7 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               title="Kho nguyên tắc 5 tầng CDS (0ms)"
             >
               <BookOpen className="w-3.5 h-3.5 text-slate-300" aria-hidden="true" />
-              <span className="hidden sm:inline">Kho Nguyên Tắc</span>
+              <span className="hidden md:inline">Kho Nguyên Tắc</span>
             </button>
 
             {/* Nút Mở Gemini Cá Nhân (1 icon) */}
@@ -230,14 +239,14 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               title="Sao chép toàn bộ bệnh án và mở Gemini Cá Nhân (Alt + G)"
             >
               <ExternalLink className="w-3.5 h-3.5 text-emerald-300" aria-hidden="true" />
-              <span className="hidden sm:inline">Mở Gemini Cá Nhân</span>
-              <kbd className="hidden md:inline px-1 py-0.2 text-[9px] font-mono bg-emerald-950/80 text-emerald-300 rounded border border-emerald-500/30 font-bold">
+              <span className="hidden md:inline">Mở Gemini</span>
+              <kbd className="hidden sm:inline px-1 py-0.2 text-[9px] font-mono bg-emerald-950/80 text-emerald-300 rounded border border-emerald-500/30 font-bold">
                 Alt+G
               </kbd>
             </button>
 
             {/* Vạch ngăn cách dọc */}
-            <div className="h-5 w-px bg-white/10 mx-1" aria-hidden="true" />
+            <div className="h-5 w-px bg-white/10 mx-0.5 sm:mx-1" aria-hidden="true" />
 
             {/* Nút Đóng Modal (nằm ngoài cùng bên phải) */}
             <button
@@ -251,10 +260,10 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
           </div>
         </header>
 
-        {/* TẦNG 2: THANH THÔNG TIN BỆNH NHÂN (Single-Line Patient Context Bar) */}
-        <div className="px-5 py-2.5 bg-slate-900/70 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        {/* TẦNG 2: THANH THÔNG TIN BỆNH NHÂN (Single-Line Patient Context Bar - 1 Hàng Duy Nhất) */}
+        <div className="px-4 sm:px-5 py-2 bg-slate-900/80 border-b border-white/[0.06] flex items-center justify-between gap-3 text-xs shrink-0 overflow-x-auto no-scrollbar">
           {/* Bên trái: Sinh hiệu & Chẩn đoán */}
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2 whitespace-nowrap min-w-0">
             <span className="text-slate-400">Đang khám:</span>
             <strong className="text-white font-semibold">
               {patient?.fullName || 'Chưa chọn BN'}
@@ -276,7 +285,7 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
 
             <span className="text-slate-400">Chẩn đoán:</span>
             <span className="text-emerald-400 font-medium">
-              {diagnosis || 'Chưa nhập chẩn đoán'}
+              {diagnosis || 'Chưa nhập'}
             </span>
 
             <span className="text-slate-600" aria-hidden="true">•</span>
@@ -286,12 +295,12 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
             </span>
           </div>
 
-          {/* Bên phải: Cảnh báo Dị ứng nổi bật (chỉ dùng màu đỏ Rose cho dị ứng thực sự) */}
-          <div className="shrink-0">
-            {patient?.allergies && patient.allergies.length > 0 && !patient.allergies[0].includes('Không có') ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 font-medium text-xs">
+          {/* Bên phải: Cảnh báo Dị ứng trên cùng 1 hàng */}
+          <div className="shrink-0 whitespace-nowrap">
+            {cleanAllergyText ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 font-medium text-xs">
                 <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" aria-hidden="true" />
-                <span>⚠️ Dị ứng: {patient.allergies.join(', ')}</span>
+                <span>⚠️ Dị ứng: {cleanAllergyText}</span>
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
@@ -304,7 +313,7 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
 
         {/* TẦNG 3: THANH 5 TAB CHỨC NĂNG (Compact Segmented Navigation) */}
         <nav
-          className="px-5 bg-[#0b111a] border-b border-white/[0.08] flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0"
+          className="px-4 sm:px-5 bg-[#0b111a] border-b border-white/[0.08] flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0"
           aria-label="Các chế độ phân tích lâm sàng"
         >
           {/* Tab 1 */}
@@ -314,9 +323,9 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               setActiveTab('full_review');
               handleRunAi('full_review');
             }}
-            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
+            className={`whitespace-nowrap px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'full_review'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07] font-semibold'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
@@ -331,9 +340,9 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               setActiveTab('suggest_rx');
               handleRunAi('suggest_rx');
             }}
-            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
+            className={`whitespace-nowrap px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'suggest_rx'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07] font-semibold'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
@@ -348,9 +357,9 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               setActiveTab('diet');
               handleRunAi('diet');
             }}
-            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
+            className={`whitespace-nowrap px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'diet'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07] font-semibold'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
@@ -365,9 +374,9 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               setActiveTab('clinic_audit');
               handleRunAi('clinic_audit');
             }}
-            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
+            className={`whitespace-nowrap px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'clinic_audit'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07] font-semibold'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
@@ -382,9 +391,9 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
               setActiveTab('chat');
               setResult(null);
             }}
-            className={`whitespace-nowrap px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
+            className={`whitespace-nowrap px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'chat'
-                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07]'
+                ? 'border-emerald-500 text-emerald-400 bg-emerald-500/[0.07] font-semibold'
                 : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
             }`}
           >
