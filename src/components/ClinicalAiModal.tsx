@@ -260,10 +260,10 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
           </div>
         </header>
 
-        {/* TẦNG 2: THANH THÔNG TIN BỆNH NHÂN (Single-Line Patient Context Bar - 1 Hàng Duy Nhất) */}
-        <div className="px-4 sm:px-5 py-2 bg-slate-900/80 border-b border-white/[0.06] flex items-center justify-between gap-3 text-xs shrink-0 overflow-x-auto no-scrollbar">
-          {/* Bên trái: Sinh hiệu & Chẩn đoán */}
-          <div className="flex items-center gap-2 whitespace-nowrap min-w-0">
+        {/* TẦNG 2: THANH THÔNG TIN BỆNH NHÂN (Patient Context Bar - Xuống Hàng Cảnh Báo Dị Ứng) */}
+        <div className="px-4 sm:px-5 py-2.5 bg-slate-900/80 border-b border-white/[0.06] shrink-0 space-y-1.5">
+          {/* Hàng 1: Sinh hiệu & Chẩn đoán lâm sàng */}
+          <div className="flex items-center gap-2.5 text-xs text-slate-300 flex-wrap">
             <span className="text-slate-400">Đang khám:</span>
             <strong className="text-white font-semibold">
               {patient?.fullName || 'Chưa chọn BN'}
@@ -295,20 +295,20 @@ export const ClinicalAiModal: React.FC<ClinicalAiModalProps> = ({
             </span>
           </div>
 
-          {/* Bên phải: Cảnh báo Dị ứng trên cùng 1 hàng */}
-          <div className="shrink-0 whitespace-nowrap">
-            {cleanAllergyText ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-300 font-medium text-xs">
+          {/* Hàng 2: Xuống hàng dành riêng cho Dị ứng (đảm bảo hiển thị đầy đủ 100%, không bị đè che chữ) */}
+          {cleanAllergyText ? (
+            <div className="flex items-center">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/15 border border-rose-500/40 text-rose-300 font-medium text-xs">
                 <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" aria-hidden="true" />
-                <span>⚠️ Dị ứng: {cleanAllergyText}</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/70" aria-hidden="true" />
-                <span>Chưa ghi nhận dị ứng</span>
-              </span>
-            )}
-          </div>
+                <span>⚠️ <strong>Cảnh Báo Dị Ứng:</strong> {cleanAllergyText}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500/70" aria-hidden="true" />
+              <span>Chưa ghi nhận tiền sử dị ứng thuốc</span>
+            </div>
+          )}
         </div>
 
         {/* TẦNG 3: THANH 5 TAB CHỨC NĂNG (Compact Segmented Navigation) */}
