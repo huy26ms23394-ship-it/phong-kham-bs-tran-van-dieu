@@ -180,6 +180,107 @@ html.dark .custom-scrollbar {
 }
 
 /* ==========================================================================
+   HỆ THỐNG ĐA CHỦ ĐỀ & MẬT ĐỘ LÂM SÀNG (THEMES & LAYOUTS)
+   ========================================================================== */
+
+/* 1. SÁNG LÂM SÀNG (Daylight White - clinical-light) */
+html[data-theme="clinical-light"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+html[data-theme="clinical-light"] body {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+html[data-theme="clinical-light"] .dark\:bg-slate-900,
+html[data-theme="clinical-light"] .dark\:bg-\[\#0b0f17\] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+html[data-theme="clinical-light"] .dark\:text-slate-100,
+html[data-theme="clinical-light"] .dark\:text-slate-200,
+html[data-theme="clinical-light"] .dark\:text-white {
+  color: #0f172a !important;
+}
+html[data-theme="clinical-light"] .dark\:border-slate-800,
+html[data-theme="clinical-light"] .dark\:border-slate-700 {
+  border-color: #e2e8f0 !important;
+}
+html[data-theme="clinical-light"] .dark\:bg-slate-800 {
+  background-color: #f1f5f9 !important;
+}
+
+/* 2. XANH BỆNH VIỆN QUỐC TẾ (Ocean Blue - ocean-medical) */
+html[data-theme="ocean-medical"] {
+  background-color: #070d18 !important;
+  color: #f1f5f9 !important;
+}
+html[data-theme="ocean-medical"] body {
+  background-color: #070d18 !important;
+  color: #f1f5f9 !important;
+}
+html[data-theme="ocean-medical"] .dark\:bg-slate-900,
+html[data-theme="ocean-medical"] .dark\:bg-\[\#0b0f17\] {
+  background-color: #0e1726 !important;
+}
+html[data-theme="ocean-medical"] .dark\:border-slate-800 {
+  border-color: #1e293b !important;
+}
+html[data-theme="ocean-medical"] .dark\:bg-slate-800 {
+  background-color: #162235 !important;
+}
+html[data-theme="ocean-medical"] .dark\:text-emerald-400,
+html[data-theme="ocean-medical"] .text-emerald-600 {
+  color: #38bdf8 !important;
+}
+html[data-theme="ocean-medical"] .bg-emerald-700,
+html[data-theme="ocean-medical"] .dark\:bg-emerald-600 {
+  background-color: #0284c7 !important;
+}
+html[data-theme="ocean-medical"] .border-emerald-500 {
+  border-color: #0284c7 !important;
+}
+
+/* 3. TƯƠNG PHẢN CAO & CHỮ RÕ NÉT (High Contrast - high-contrast) */
+html[data-theme="high-contrast"] {
+  font-size: 104% !important;
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+html[data-theme="high-contrast"] body {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+html[data-theme="high-contrast"] .dark\:bg-slate-900,
+html[data-theme="high-contrast"] .dark\:bg-\[\#0b0f17\] {
+  background-color: #0a0a0a !important;
+}
+html[data-theme="high-contrast"] .dark\:border-slate-800,
+html[data-theme="high-contrast"] .dark\:border-slate-700 {
+  border-color: #52525b !important;
+}
+html[data-theme="high-contrast"] input,
+html[data-theme="high-contrast"] select,
+html[data-theme="high-contrast"] textarea {
+  border-color: #71717a !important;
+  font-weight: 600 !important;
+}
+html[data-theme="high-contrast"] button {
+  font-weight: 700 !important;
+}
+
+/* 4. CHẾ ĐỘ BỐ CỤC GỌN GÀNG (compact-pro: Khung hình 1080p không cuộn) */
+html[data-layout="compact-pro"] .compact-pro-tight-p {
+  padding: 0.85rem !important;
+}
+html[data-layout="compact-pro"] .compact-pro-tight-gap {
+  gap: 0.75rem !important;
+}
+html[data-layout="compact-pro"] .compact-pro-tight-space > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0.75rem !important;
+}
+
+/* ==========================================================================
    PRINT CSS - KHỔ A5 CHUẨN Y TẾ VIỆT NAM (148mm x 210mm)
    Loại bỏ 100% background của trang web, nền giấy trắng tinh khiết mực đen,
    vừa khít 1 trang A5 duy nhất (1 sheet of paper), không bị tràn trang.

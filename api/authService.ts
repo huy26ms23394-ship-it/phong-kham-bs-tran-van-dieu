@@ -138,17 +138,29 @@ export async function verifyMasterAdmin(emailOrUser: string, pass: string): Prom
     console.warn('[AuthService] Lỗi đọc admin password hash từ DB, fallback env:', err);
   }
 
-  // 2. Fallback nếu có ADMIN_PASSWORD_HASH trong env
+  // 2. Fallback nếu có ADMIN_PASSWORD_HASH trong env (So sánh timing-safe)
   const envHash = process.env.ADMIN_PASSWORD_HASH;
   if (envHash) {
     if (envHash.includes(':')) {
       return verifyPasswordWithSalt(pass, envHash);
     }
     const computedHash = crypto.createHash('sha256').update(pass).digest('hex');
-    if (computedHash === envHash) return true;
+    const computedBuf = Buffer.from(computedHash, 'utf-8');
+    const envBuf = Buffer.from(envHash, 'utf-8');
+    if (computedBuf.length === envBuf.length && crypto.timingSafeEqual(computedBuf, envBuf)) {
+      return true;
+    }
   }
 
-  // 3. Fallback về mật khẩu khởi tạo ban đầu
+  // 3. Fallback về mật khẩu khởi tạo ban đầu (So sánh timing-safe chống Timing Attack)
   const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || 'DieuClinic@2026!';
-  return pass === initialPassword || pass === 'DieuClinic@2026!';
+  const inputHash = crypto.createHash('sha256').update(pass).digest();
+  const initHash = crypto.createHash('sha256').update(initialPassword).digest();
+  const defaultHash = crypto.createHash('sha256').update('DieuClinic@2026!').digest();
+
+  if (crypto.timingSafeEqual(inputHash, initHash) || crypto.timingSafeEqual(inputHash, defaultHash)) {
+    return true;
+  }
+
+  return false;
 }

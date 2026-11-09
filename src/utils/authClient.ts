@@ -31,6 +31,10 @@ export function clearSession(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('mediba_google_user_v2');
+    localStorage.removeItem('mediba_consultation_draft');
+    localStorage.removeItem('mediba_quick_patient_draft');
+    sessionStorage.clear();
   } catch {}
 }
 

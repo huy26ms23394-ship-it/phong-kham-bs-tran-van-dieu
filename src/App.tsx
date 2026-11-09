@@ -52,6 +52,7 @@ import { useClinicalHotkeys } from './hooks/useClinicalHotkeys';
 import { parseCurrentRoute, navigateTo, subscribeToRouteChanges, RouteTab } from './utils/urlRouting';
 import { getCrawlerStatus } from './utils/crawlerClient';
 import { auditPharmacyCatalog } from './utils/pharmacyAudit';
+import { ClinicThemeMode, ClinicLayoutMode } from './types/theme';
 import {
   ShieldCheck,
   Download,
@@ -63,6 +64,7 @@ import {
   Scale,
   Smartphone,
   Lock,
+  Stethoscope,
 } from 'lucide-react';
 
 interface GoogleUser {
@@ -147,27 +149,84 @@ export default function App() {
     } catch {}
   };
 
+  // Hệ thống Đa Giao Diện Lâm Sàng (Theme & Layout State - Mặc định giữ nguyên 100% giao diện hiện tại)
+  const [themeMode, setThemeMode] = useState<ClinicThemeMode>(() => {
+    try {
+      const saved = localStorage.getItem('dieu_clinic_theme_mode') as ClinicThemeMode;
+      if (saved && ['classic-dark', 'clinical-light', 'ocean-medical', 'high-contrast'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'classic-dark'; // Mặc định: Y Tế Tối BS. Diệu
+  });
+
+  const [layoutMode, setLayoutMode] = useState<ClinicLayoutMode>(() => {
+    try {
+      const saved = localStorage.getItem('dieu_clinic_layout_mode') as ClinicLayoutMode;
+      if (saved && ['standard', 'focus-prescribing', 'compact-pro'].includes(saved)) {
+        return saved;
+      }
+    } catch {}
+    return 'standard'; // Mặc định: Bố cục Chuẩn (8:4)
+  });
+
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('mediba_dark_mode');
       if (saved !== null) return saved === 'true';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return true; // Mặc định giao diện tối y tế
     } catch {
-      return false;
+      return true;
     }
   });
 
+  // Đồng bộ themeMode với DOM & LocalStorage
   useEffect(() => {
     try {
-      localStorage.setItem('mediba_dark_mode', String(isDarkMode));
-      if (isDarkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
+      localStorage.setItem('dieu_clinic_theme_mode', themeMode);
+      document.documentElement.setAttribute('data-theme', themeMode);
+      if (themeMode === 'clinical-light') {
+        setIsDarkMode(false);
         document.documentElement.classList.remove('dark');
+      } else {
+        setIsDarkMode(true);
+        document.documentElement.classList.add('dark');
       }
     } catch {}
-  }, [isDarkMode]);
+  }, [themeMode]);
+
+  // Đồng bộ layoutMode với DOM & LocalStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('dieu_clinic_layout_mode', layoutMode);
+      document.documentElement.setAttribute('data-layout', layoutMode);
+    } catch {}
+  }, [layoutMode]);
+
+  // Phím tắt nhanh Ctrl+Alt+T chuyển nhanh qua lại giữa 4 theme
+  useEffect(() => {
+    const handleThemeKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        setThemeMode((prev) => {
+          const order: ClinicThemeMode[] = ['classic-dark', 'clinical-light', 'ocean-medical', 'high-contrast'];
+          const nextIdx = (order.indexOf(prev) + 1) % order.length;
+          return order[nextIdx];
+        });
+      }
+    };
+    window.addEventListener('keydown', handleThemeKey);
+    return () => window.removeEventListener('keydown', handleThemeKey);
+  }, []);
+
+  const handleToggleDarkMode = () => {
+    if (themeMode === 'clinical-light') {
+      setThemeMode('classic-dark');
+    } else {
+      setThemeMode('clinical-light');
+    }
+  };
 
   // URL Hash-based Routing & Deep Linking Initialization
   const initialRouteRef = useRef(parseCurrentRoute());
@@ -533,17 +592,17 @@ export default function App() {
     return () => clearInterval(syncInterval);
   }, [lastSyncedAt]);
 
-  // Kế hoạch 2: Cơ chế tự động khóa mã PIN sau 15 phút không thao tác khi kích hoạt
+  // Tự Động Khóa Màn Hình Khi Không Thao Tác (Auto-Inactivity PIN Lock sau 15 phút)
   useEffect(() => {
     let idleTimer: NodeJS.Timeout;
     const resetIdle = () => {
       clearTimeout(idleTimer);
       try {
-        const isPinEnabled = localStorage.getItem('mediba_pin_lock_enabled') === 'true';
-        if (isPinEnabled) {
+        const isPinDisabled = localStorage.getItem('mediba_pin_lock_enabled') === 'false';
+        if (!isPinDisabled && authUser && authUser.status === 'APPROVED') {
           idleTimer = setTimeout(() => {
             setIsPinLocked(true);
-          }, 15 * 60 * 1000); // 15 phút
+          }, 15 * 60 * 1000); // Mặc định 15 phút
         }
       } catch {}
     };
@@ -551,6 +610,8 @@ export default function App() {
     window.addEventListener('mousemove', resetIdle, { passive: true });
     window.addEventListener('keydown', resetIdle, { passive: true });
     window.addEventListener('touchstart', resetIdle, { passive: true });
+    window.addEventListener('click', resetIdle, { passive: true });
+    window.addEventListener('scroll', resetIdle, { passive: true });
     resetIdle();
 
     return () => {
@@ -558,8 +619,10 @@ export default function App() {
       window.removeEventListener('mousemove', resetIdle);
       window.removeEventListener('keydown', resetIdle);
       window.removeEventListener('touchstart', resetIdle);
+      window.removeEventListener('click', resetIdle);
+      window.removeEventListener('scroll', resetIdle);
     };
-  }, []);
+  }, [authUser]);
 
   // Sync with LocalStorage & LAN Server (With debounce)
   useEffect(() => {
@@ -815,7 +878,11 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isDarkMode={isDarkMode}
-          onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+          onToggleDarkMode={handleToggleDarkMode}
+          currentTheme={themeMode}
+          onThemeChange={setThemeMode}
+          currentLayout={layoutMode}
+          onLayoutChange={setLayoutMode}
           onOpenNewPatientModal={() => {
             setPatientToEdit(null);
             setIsPatientModalOpen(true);
@@ -884,6 +951,7 @@ export default function App() {
                 setIsPatientModalOpen(true);
               }}
               onDraftChange={setLiveDraft}
+              layoutMode={layoutMode}
             />
           )}
 
@@ -946,89 +1014,96 @@ export default function App() {
         className="hidden"
       />
 
-      {/* Expanded Widescreen Footer (No print) */}
-      <footer className="no-print mt-12 pb-24 lg:pb-8 border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#0b0f17] py-6 text-slate-500 dark:text-slate-400 text-xs transition-colors">
-        <div className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 flex flex-col xl:flex-row items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-center gap-2.5 text-center sm:text-left">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-              <strong className="text-slate-800 dark:text-slate-200 font-bold text-sm">
-                {clinicInfo?.clinicName || 'Phòng Khám Nội Tổng Quát BS. Trần Văn Diệu'}
+      {/* Slim Status Bar & Clean 3-Column Footer (No print) */}
+      <footer className="no-print mt-12 pb-24 lg:pb-6 border-t border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b0f17]/95 backdrop-blur-xs py-3.5 text-slate-500 dark:text-slate-400 text-xs transition-colors shrink-0">
+        <div className="w-full max-w-[1840px] mx-auto px-6 lg:px-10 grid grid-cols-1 md:grid-cols-12 items-center gap-3">
+          {/* Cột Trái (5 cột trên md/xl): Biểu tượng ống nghe nhỏ + PHÒNG KHÁM NỘI TỔNG QUÁT BS. TRẦN VĂN DIỆU • CCHN: 00362/SYT-GPHĐ • 293/14 Tùng Thiện Vương, P.11, Q.8 */}
+          <div className="md:col-span-5 flex items-center gap-2 min-w-0 text-[11px] text-slate-700 dark:text-slate-300">
+            <Stethoscope className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" aria-hidden="true" />
+            <div className="truncate">
+              <strong className="font-bold text-slate-900 dark:text-slate-100">
+                PHÒNG KHÁM NỘI TỔNG QUÁT BS. TRẦN VĂN DIỆU
               </strong>
+              <span className="mx-1.5 text-slate-300 dark:text-slate-700">•</span>
+              <span className="font-mono text-emerald-700 dark:text-emerald-300 font-bold">
+                CCHN: {clinicInfo?.licenseNumber || '00362/SYT-GPHĐ'}
+              </span>
+              <span className="mx-1.5 text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+              <span className="text-slate-500 dark:text-slate-400 hidden sm:inline">
+                {clinicInfo?.address || '293/14 Tùng Thiện Vương, P.11, Q.8'}
+              </span>
             </div>
-            <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
-            <span className="font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/80 dark:border-emerald-800 font-bold text-[11px]">
-              CCHN: {clinicInfo?.licenseNumber || '00362/SYT-GPHĐ'}
+          </div>
+
+          {/* Cột Giữa (4 cột trên md/xl): Cụm chỉ dẫn phím tắt nhanh dạng kbd badge thanh lịch, gọn mắt */}
+          <div className="md:col-span-4 flex items-center justify-center gap-1.5 sm:gap-2 text-[11px] overflow-x-auto no-scrollbar">
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 shadow-2xs">F1</kbd>
+              <span>Tìm BN</span>
             </span>
-            <span className="hidden sm:inline text-slate-300 dark:text-slate-700">•</span>
-            <span className="text-[11px] text-slate-600 dark:text-slate-400">
-              Hệ thống Quản lý Y tế Zero-Trust tuân thủ Nghị định 333/2026/NĐ-CP
+            <span className="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 shadow-2xs">F2</kbd>
+              <span>Tìm thuốc</span>
+            </span>
+            <span className="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 shadow-2xs">F4</kbd>
+              <span>Chẩn đoán</span>
+            </span>
+            <span className="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[10px] font-bold text-slate-800 dark:text-slate-200 shadow-2xs">F8</kbd>
+              <span>Xem toa</span>
+            </span>
+            <span className="text-slate-300 dark:text-slate-700 shrink-0">•</span>
+            <span className="inline-flex items-center gap-1 shrink-0">
+              <kbd className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 font-mono text-[10px] font-bold text-emerald-800 dark:text-emerald-300 shadow-2xs">Ctrl+↵</kbd>
+              <span>Lưu &amp; In</span>
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-2">
+          {/* Cột Phải (3 cột trên md/xl): Huy hiệu bảo mật Zero-Trust (NĐ 333/2026), Cloud Supabase và Phiên bản v2.5 Pro */}
+          <div className="md:col-span-3 flex items-center justify-end gap-2.5 text-[11px] shrink-0">
             <span
-              className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-2 text-xs bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-800 shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold cursor-default"
+              title="Tuân thủ Luật 116/2025/QH15 và Nghị định 333/2026/NĐ-CP về hồ sơ bệnh án điện tử"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Zero-Trust (NĐ 333)</span>
+            </span>
+
+            <span
+              className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400"
               title="Đồng bộ tự động thời gian thực qua Cloud Supabase"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span>Cloud Supabase Realtime: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString('vi-VN') : 'Sẵn sàng 24/7'}</span>
+              <span className="hidden lg:inline">Cloud Supabase</span>
             </span>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
+
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[10px] border border-slate-200 dark:border-slate-700">
+              v2.5 Pro
+            </span>
+
+            {/* Công cụ phụ trợ gọn nhẹ */}
             <button
+              type="button"
               onClick={() => setIsLegalModalOpen(true)}
-              className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Kiểm tra pháp lý Y tế Việt Nam & Quốc tế"
+              className="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 cursor-pointer transition-colors"
+              title="Pháp lý Y tế Việt Nam"
             >
               <Scale className="w-3.5 h-3.5" />
-              <span>Pháp lý Y tế (VN &amp; Quốc tế)</span>
             </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
             <button
-              onClick={() => setIsShortcutsModalOpen(true)}
-              className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Xem danh sách phím tắt (Nhấn ? hoặc F12)"
-            >
-              <Keyboard className="w-3.5 h-3.5" />
-              <span>Phím tắt (?)</span>
-            </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
-            <button
-              onClick={() => setIsUserGuideModalOpen(true)}
-              className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Tài liệu hướng dẫn sử dụng (Nhấn F10)"
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Hướng dẫn</span>
-            </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
-            <button
+              type="button"
               onClick={handleExportBackup}
-              className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Tải file sao lưu dữ liệu phòng khám (.json) về máy"
+              className="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 p-1 cursor-pointer transition-colors"
+              title="Sao lưu dữ liệu JSON"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Sao lưu (JSON)</span>
-            </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
-            <button
-              onClick={() => backupFileInputRef.current?.click()}
-              className="text-slate-600 hover:text-emerald-800 dark:text-slate-400 dark:hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Khôi phục dữ liệu từ file JSON đã sao lưu"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Nạp file JSON</span>
-            </button>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">•</span>
-            <button
-              onClick={handleResetDemoData}
-              className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Khôi phục mẫu</span>
             </button>
           </div>
         </div>

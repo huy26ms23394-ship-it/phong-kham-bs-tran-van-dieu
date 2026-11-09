@@ -9,19 +9,19 @@ dotenv.config();
 
 export const app = express();
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // ================= BẢO MẬT & SECURITY HARDENING (LUẬT 116/2025/QH15 & NĐ 333/2026/NĐ-CP) =================
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
 });
 
-// In-Memory Sliding-Window IP Rate Limiter
+// In-Memory Sliding-Window IP Rate Limiter cho toàn hệ thống
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 120;
@@ -35,6 +35,68 @@ function checkRateLimit(ip: string): boolean {
   }
   record.count += 1;
   return record.count <= MAX_REQUESTS_PER_WINDOW;
+}
+
+// Bộ giới hạn tần suất đăng nhập nghiêm ngặt chống Brute-Force & Credential Stuffing
+// Tối đa 5 lần thử sai trong 15 phút trên mỗi IP
+interface AdminLockoutRecord {
+  failures: number;
+  lockedUntil: number;
+}
+const adminAuthLockoutMap = new Map<string, AdminLockoutRecord>();
+export const ADMIN_AUTH_MAX_FAILURES = 5;
+export const ADMIN_AUTH_LOCKOUT_MS = 15 * 60 * 1000; // 15 phút
+
+export function checkAdminAuthLockout(ip: string): { isLocked: boolean; remainingSec: number } {
+  const now = Date.now();
+  const rec = adminAuthLockoutMap.get(ip);
+  if (!rec) return { isLocked: false, remainingSec: 0 };
+  if (now > rec.lockedUntil) {
+    adminAuthLockoutMap.delete(ip);
+    return { isLocked: false, remainingSec: 0 };
+  }
+  return { isLocked: true, remainingSec: Math.ceil((rec.lockedUntil - now) / 1000) };
+}
+
+export function recordAdminAuthFailure(ip: string): number {
+  const now = Date.now();
+  const rec = adminAuthLockoutMap.get(ip) || { failures: 0, lockedUntil: 0 };
+  rec.failures += 1;
+  if (rec.failures >= ADMIN_AUTH_MAX_FAILURES) {
+    rec.lockedUntil = now + ADMIN_AUTH_LOCKOUT_MS;
+  }
+  adminAuthLockoutMap.set(ip, rec);
+  return rec.failures;
+}
+
+export function resetAdminAuthFailures(ip: string): void {
+  adminAuthLockoutMap.delete(ip);
+}
+
+// Hàm làm sạch dữ liệu đầu vào chống XSS, Prototype Pollution & Injection độc hại
+export function sanitizeInput<T>(input: T): T {
+  if (input === null || input === undefined) return input;
+  if (typeof input === 'string') {
+    return (input as string)
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/data:text\/html/gi, '')
+      .replace(/on\w+\s*=/gi, '') as unknown as T;
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeInput(item)) as unknown as T;
+  }
+  if (typeof input === 'object') {
+    const cleanObj: Record<string, any> = {};
+    for (const [key, val] of Object.entries(input)) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue; // Chặn triệt để Prototype Pollution
+      }
+      cleanObj[key] = sanitizeInput(val);
+    }
+    return cleanObj as T;
+  }
+  return input;
 }
 
 const apiRouter = express.Router();
@@ -128,10 +190,28 @@ export const adminOnlyMiddleware: express.RequestHandler = (req, res, next) => {
 
 // ================= AUTHENTICATION & ZERO-TRUST ENDPOINTS =================
 
-// 1. Đăng nhập Master Admin (Email / Username + Mật khẩu cố định)
+// 1. Đăng nhập Master Admin (Email / Username + Mật khẩu cố định) - Bảo vệ chống Brute-Force & Timing Attack
 apiRouter.post('/auth/login-admin', async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    
+    // Kiểm tra khóa tạm thời chống tấn công dò mật khẩu
+    const lockout = checkAdminAuthLockout(clientIp);
+    if (lockout.isLocked) {
+      await dbService.recordAuditLog({
+        action: 'ADMIN_BRUTE_FORCE_BLOCKED',
+        ip: clientIp,
+        status: 'BLOCKED',
+        userAgent: req.headers['user-agent'],
+        details: { remainingSeconds: lockout.remainingSec, path: req.path },
+      });
+      return res.status(429).json({
+        success: false,
+        error: `Đã vượt quá số lần thử sai (Tối đa 5 lần). Vui lòng đợi ${Math.ceil(lockout.remainingSec / 60)} phút để thử lại.`,
+        retryAfterSeconds: lockout.remainingSec,
+      });
+    }
+
     const { emailOrUsername, password } = req.body || {};
 
     if (!emailOrUsername || !password) {
@@ -140,15 +220,25 @@ apiRouter.post('/auth/login-admin', async (req, res) => {
 
     const isValid = await verifyMasterAdmin(emailOrUsername, password);
     if (!isValid) {
+      const fails = recordAdminAuthFailure(clientIp);
       await dbService.recordAuditLog({
-        action: 'ADMIN_LOGIN_FAILED',
+        action: fails >= ADMIN_AUTH_MAX_FAILURES ? 'ADMIN_BRUTE_FORCE_TRIGGERED' : 'ADMIN_LOGIN_FAILED',
         ip: clientIp,
-        status: 'FAILURE',
+        status: fails >= ADMIN_AUTH_MAX_FAILURES ? 'BLOCKED' : 'FAILURE',
         userAgent: req.headers['user-agent'],
-        details: { inputUser: emailOrUsername },
+        details: { inputUser: emailOrUsername, failureCount: fails, maxAllowed: ADMIN_AUTH_MAX_FAILURES },
       });
-      return res.status(401).json({ success: false, error: 'Tài khoản hoặc mật khẩu quản trị viên không chính xác' });
+      
+      return res.status(401).json({
+        success: false,
+        error: fails >= ADMIN_AUTH_MAX_FAILURES
+          ? 'Đã thử sai quá 5 lần. IP của bạn tạm thời bị khóa trong 15 phút để bảo vệ hệ thống y tế.'
+          : `Tài khoản hoặc mật khẩu quản trị viên không chính xác. Bạn còn ${ADMIN_AUTH_MAX_FAILURES - fails} lần thử.`,
+      });
     }
+
+    // Đăng nhập thành công -> Reset bộ đếm thử sai của IP này
+    resetAdminAuthFailures(clientIp);
 
     const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
     const adminUser = await dbService.upsertAuthorizedUser({
@@ -422,10 +512,28 @@ apiRouter.delete('/auth/user', authMiddleware, adminOnlyMiddleware, async (req, 
   }
 });
 
-// 8. Đổi mật khẩu Quản Trị Viên Master Admin
+// 8. Đổi mật khẩu Quản Trị Viên Master Admin (Bảo vệ chống Brute-force & Salt PBKDF2)
 apiRouter.post('/auth/change-password', authMiddleware, adminOnlyMiddleware, async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    
+    // Kiểm tra khóa tạm thời chống tấn công dò mật khẩu
+    const lockout = checkAdminAuthLockout(clientIp);
+    if (lockout.isLocked) {
+      await dbService.recordAuditLog({
+        action: 'ADMIN_BRUTE_FORCE_BLOCKED',
+        ip: clientIp,
+        status: 'BLOCKED',
+        userAgent: req.headers['user-agent'],
+        details: { remainingSeconds: lockout.remainingSec, path: req.path },
+      });
+      return res.status(429).json({
+        success: false,
+        error: `Đã vượt quá số lần thử sai (Tối đa 5 lần). Vui lòng đợi ${Math.ceil(lockout.remainingSec / 60)} phút để thử lại.`,
+        retryAfterSeconds: lockout.remainingSec,
+      });
+    }
+
     const adminUser = (req as any).user;
     const { currentPassword, newPassword } = req.body || {};
 
@@ -437,18 +545,27 @@ apiRouter.post('/auth/change-password', authMiddleware, adminOnlyMiddleware, asy
       return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có tối thiểu 8 ký tự' });
     }
 
-    // Xác thực mật khẩu hiện tại
+    // Xác thực mật khẩu hiện tại (Timing-safe)
     const isCurrentValid = await verifyMasterAdmin(adminUser.email, currentPassword);
     if (!isCurrentValid) {
+      const fails = recordAdminAuthFailure(clientIp);
       await dbService.recordAuditLog({
-        action: 'ADMIN_PASSWORD_CHANGE_FAILED',
+        action: fails >= ADMIN_AUTH_MAX_FAILURES ? 'ADMIN_BRUTE_FORCE_TRIGGERED' : 'ADMIN_PASSWORD_CHANGE_FAILED',
         ip: clientIp,
-        status: 'FAILURE',
+        status: fails >= ADMIN_AUTH_MAX_FAILURES ? 'BLOCKED' : 'FAILURE',
         userAgent: req.headers['user-agent'],
-        details: { email: adminUser.email, reason: 'INVALID_CURRENT_PASSWORD' },
+        details: { email: adminUser.email, reason: 'INVALID_CURRENT_PASSWORD', failureCount: fails },
       });
-      return res.status(401).json({ success: false, error: 'Mật khẩu hiện tại không chính xác' });
+      return res.status(401).json({
+        success: false,
+        error: fails >= ADMIN_AUTH_MAX_FAILURES
+          ? 'Đã thử sai quá 5 lần. IP của bạn tạm thời bị khóa trong 15 phút để bảo vệ hệ thống.'
+          : `Mật khẩu hiện tại không chính xác. Bạn còn ${ADMIN_AUTH_MAX_FAILURES - fails} lần thử.`,
+      });
     }
+
+    // Đổi mật khẩu thành công -> Reset bộ đếm thử sai
+    resetAdminAuthFailures(clientIp);
 
     // Mã hóa mật khẩu mới với salt + PBKDF2 (SHA-512)
     const newHash = hashPasswordWithSalt(String(newPassword));
@@ -796,9 +913,31 @@ apiRouter.put('/crawler/item/:id', (req, res) => {
   }
 });
 
-// Vercel Cron Job: Daily Maintenance (chạy dưới 30s)
-apiRouter.get('/cron/daily-maintenance', async (_req, res) => {
+// Vercel Cron Job: Daily Maintenance (chạy dưới 30s - Bảo vệ bằng Vercel Cron Header / CRON_SECRET / SUPER_ADMIN)
+apiRouter.get('/cron/daily-maintenance', async (req, res) => {
   try {
+    const isVercelCron = req.headers['x-vercel-cron'] === '1';
+    const authHeader = req.headers['authorization'] || '';
+    const cronSecret = process.env.CRON_SECRET;
+    const isSecretMatch = Boolean(cronSecret && (authHeader === `Bearer ${cronSecret}` || req.headers['x-cron-secret'] === cronSecret));
+    
+    let isSuperAdmin = false;
+    if (authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      const payload = verifyToken(token);
+      if (payload && payload.role === 'SUPER_ADMIN') {
+        isSuperAdmin = true;
+      }
+    }
+
+    if (!isVercelCron && !isSecretMatch && !isSuperAdmin) {
+      return res.status(401).json({
+        success: false,
+        error: 'UNAUTHORIZED_CRON',
+        message: 'Yêu cầu bảo mật: Endpoint Cron Job chỉ được phép kích hoạt bởi Vercel Cron hoặc Quản trị viên SUPER_ADMIN.',
+      });
+    }
+
     const pingResult = await dbService.pingDatabase();
     const { data } = await dbService.getClinicData();
     const catalogCount = (data?.pharmacyCatalog as unknown[])?.length || 0;
@@ -861,7 +1000,10 @@ apiRouter.post('/clinic/sync', authMiddleware, async (req, res) => {
   try {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const authUser = (req as any).user;
-    const result = await dbService.saveClinicData(req.body || {});
+    
+    // Làm sạch dữ liệu y tế trước khi lưu vào Supabase (Chống XSS, Prototype Pollution)
+    const sanitizedPayload = sanitizeInput(req.body || {});
+    const result = await dbService.saveClinicData(sanitizedPayload);
 
     dbService.recordAuditLog({
       action: 'CLINIC_SYNC_PUSH',

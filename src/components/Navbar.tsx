@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ClinicSettings } from '../types/medical';
 import { GoogleAuthBar, GoogleUser } from './GoogleAuthBar';
 import { ClinicUser } from '../types/auth';
+import { ThemeAndLayoutSwitcher } from './ThemeAndLayoutSwitcher';
+import { ClinicThemeMode, ClinicLayoutMode } from '../types/theme';
 import {
   Stethoscope,
   Users,
@@ -61,6 +63,10 @@ interface NavbarProps {
   onOpenChangePassword?: () => void;
   currentAiModel?: string;
   onAiModelChange?: (model: string) => void;
+  currentTheme?: ClinicThemeMode;
+  onThemeChange?: (theme: ClinicThemeMode) => void;
+  currentLayout?: ClinicLayoutMode;
+  onLayoutChange?: (layout: ClinicLayoutMode) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -69,6 +75,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   isDarkMode = false,
   onToggleDarkMode,
+  currentTheme = 'classic-dark',
+  onThemeChange,
+  currentLayout = 'standard',
+  onLayoutChange,
   onOpenNewPatientModal,
   onOpenPharmacyModal,
   pharmacyIssueCount = 0,
@@ -180,6 +190,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 F3
               </kbd>
             </button>
+
+            {/* Theme & Layout Switcher (Bổ sung Đa Lựa Chọn Giao Diện) */}
+            {onThemeChange && onLayoutChange && (
+              <ThemeAndLayoutSwitcher
+                currentTheme={currentTheme}
+                onThemeChange={onThemeChange}
+                currentLayout={currentLayout}
+                onLayoutChange={onLayoutChange}
+              />
+            )}
 
             {/* Dark Mode Toggle: Always visible */}
             {onToggleDarkMode && (
