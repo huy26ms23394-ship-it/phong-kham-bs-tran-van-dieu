@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Patient,
   Prescription,
@@ -21,6 +21,9 @@ import {
   formatVietnameseFullName,
 } from '../utils/medicationSchedule';
 import { ClinicLayoutMode } from '../types/theme';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import { CLINIC_MEDICATION_CATALOG } from '../data/initialData';
 import { INITIAL_CLINICAL_PROTOCOLS } from '../data/clinicalProtocols';
 import {
@@ -700,25 +703,48 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
       p.patientCode.toLowerCase().includes(patientSearch.toLowerCase())
   );
 
-  const categories = ['all', ...Array.from(new Set(catalog.map((m) => m.category)))];
-  const filteredCatalog = catalog.filter((m) => {
-    const matchesCategory = catalogFilter === 'all' || m.category === catalogFilter;
-    const matchesSearch =
-      m.name.toLowerCase().includes(catalogSearchTerm.toLowerCase()) ||
-      (m.activeIngredient &&
-        m.activeIngredient.toLowerCase().includes(catalogSearchTerm.toLowerCase())) ||
-      m.category.toLowerCase().includes(catalogSearchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
+  const categories = useMemo<string[]>(
+    () => ['all', ...Array.from(new Set(catalog.map((m) => m.category)))],
+    [catalog]
+  );
+
+  const filteredCatalog = useMemo<MedicationCatalogItem[]>(() => {
+    return catalog.filter((m) => {
+      const matchesCategory = catalogFilter === 'all' || m.category === catalogFilter;
+      const targetText = `${m.name} ${m.activeIngredient || ''} ${m.category}`;
+      const matchesSearch = matchesVietnameseSearch(targetText, catalogSearchTerm);
+      return matchesCategory && matchesSearch;
+    });
+  }, [catalog, catalogFilter, catalogSearchTerm]);
+
+  const catalogPagination = useSmartPagination<MedicationCatalogItem>({
+    items: filteredCatalog,
+    initialPageSize: 15,
+    resetDependencies: [catalogSearchTerm, catalogFilter],
   });
 
-  // Keyboard navigation & events
+  // Keyboard navigation & events with multi-page support
   const handleCatalogKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setCatalogSelectedIndex((prev) => Math.min(prev + 1, Math.max(0, filteredCatalog.length - 1)));
+      setCatalogSelectedIndex((prev) => {
+        const next = Math.min(prev + 1, Math.max(0, filteredCatalog.length - 1));
+        const targetPage = Math.floor(next / catalogPagination.pageSize) + 1;
+        if (targetPage !== catalogPagination.currentPage) {
+          catalogPagination.goToPage(targetPage);
+        }
+        return next;
+      });
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setCatalogSelectedIndex((prev) => Math.max(prev - 1, 0));
+      setCatalogSelectedIndex((prev) => {
+        const next = Math.max(prev - 1, 0);
+        const targetPage = Math.floor(next / catalogPagination.pageSize) + 1;
+        if (targetPage !== catalogPagination.currentPage) {
+          catalogPagination.goToPage(targetPage);
+        }
+        return next;
+      });
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredCatalog.length > 0) {
@@ -742,12 +768,13 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
 
   useEffect(() => {
     if (catalogListRef.current && catalogSelectedIndex >= 0) {
-      const activeChild = catalogListRef.current.children[catalogSelectedIndex] as HTMLElement | undefined;
+      const pageLocalIndex = catalogSelectedIndex % catalogPagination.pageSize;
+      const activeChild = catalogListRef.current.children[pageLocalIndex] as HTMLElement | undefined;
       if (activeChild) {
         activeChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     }
-  }, [catalogSelectedIndex]);
+  }, [catalogSelectedIndex, catalogPagination.pageSize]);
 
   useEffect(() => {
     if (toastMessage) {
@@ -1620,7 +1647,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
                 )}
               </div>
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                {filteredCatalog.slice(0, 8).map((item) => (
+                {filteredCatalog.slice(0, 8).map((item: MedicationCatalogItem) => (
                   <button
                     key={item.id}
                     type="button"
@@ -2108,7 +2135,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
 
               {/* Category Filter */}
               <div className="flex flex-wrap gap-1.5">
-                {categories.map((cat) => (
+                {categories.map((cat: string) => (
                   <button
                     key={cat}
                     onClick={() => setCatalogFilter(cat)}
@@ -2126,10 +2153,11 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
               {/* Catalog List with keyboard cursor selection */}
               <div
                 ref={catalogListRef}
-                className="space-y-2 max-h-[580px] overflow-y-auto pr-1.5 custom-scrollbar"
+                className="space-y-2 max-h-[520px] overflow-y-auto pr-1.5 custom-scrollbar"
               >
-                {filteredCatalog.map((item, index) => {
-                  const isActive = index === catalogSelectedIndex;
+                {catalogPagination.paginatedItems.map((item, pageLocalIndex) => {
+                  const globalIndex = (catalogPagination.currentPage - 1) * catalogPagination.pageSize + pageLocalIndex;
+                  const isActive = globalIndex === catalogSelectedIndex;
                   return (
                     <div
                       key={item.id}
@@ -2189,6 +2217,14 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
                   );
                 })}
               </div>
+
+              {/* Thanh phân trang thông minh cho Kho Thuốc bên phải */}
+              <ClinicPaginationBar
+                pagination={catalogPagination}
+                pageSizeOptions={[12, 15, 25, 50]}
+                itemLabel="thuốc"
+                isCompact={true}
+              />
             </div>
           </div>
         )}
@@ -2248,7 +2284,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
 
                   {/* Category Filter */}
                   <div className="flex flex-wrap gap-1.5">
-                    {categories.map((cat) => (
+                    {categories.map((cat: string) => (
                       <button
                         key={cat}
                         onClick={() => setCatalogFilter(cat)}
@@ -2265,7 +2301,7 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
 
                   {/* Catalog list in drawer */}
                   <div className="space-y-2">
-                    {filteredCatalog.map((item) => (
+                    {catalogPagination.paginatedItems.map((item) => (
                       <div
                         key={item.id}
                         onClick={() => {
@@ -2290,6 +2326,14 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
                       </div>
                     ))}
                   </div>
+
+                  {/* Phân trang trong Drawer */}
+                  <ClinicPaginationBar
+                    pagination={catalogPagination}
+                    pageSizeOptions={[12, 15, 25, 50]}
+                    itemLabel="thuốc"
+                    isCompact={true}
+                  />
                 </div>
               </div>
             </div>

@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Prescription, ClinicSettings } from '../types/medical';
 import { formatDosageSummary } from '../utils/medicationSchedule';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import {
   FileText,
   Printer,
@@ -13,6 +16,7 @@ import {
   Eye,
   RotateCcw,
   FlaskConical,
+  Filter,
 } from 'lucide-react';
 import { PrescriptionReviewModal } from './PrescriptionReviewModal';
 
@@ -37,17 +41,39 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
   onGoToConsultation,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [timeframeFilter, setTimeframeFilter] = useState<'all' | 'today' | '7days' | 'month'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(
     prescriptions[0]?.id || null
   );
   const [reviewRx, setReviewRx] = useState<Prescription | null>(null);
 
-  const filtered = prescriptions.filter(
-    (rx) =>
-      rx.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rx.prescriptionCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rx.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = useMemo<Prescription[]>(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    return prescriptions.filter((rx) => {
+      // Lọc theo mốc thời gian
+      if (timeframeFilter !== 'all') {
+        const rxDate = (rx.examinationDate || rx.createdAt || '').slice(0, 10);
+        if (timeframeFilter === 'today' && rxDate !== todayStr) return false;
+        if (timeframeFilter === '7days' && rxDate < sevenDaysAgo) return false;
+        if (timeframeFilter === 'month' && rxDate < thirtyDaysAgo) return false;
+      }
+
+      // Lọc theo từ khóa tìm kiếm (Tên bệnh nhân, mã toa, chẩn đoán ICD, và tên các loại thuốc đã kê)
+      const medNames = (rx.medications || []).map((m) => m.name).join(' ');
+      const targetText = `${rx.patientName} ${rx.prescriptionCode} ${rx.diagnosis} ${rx.icd10Code || ''} ${medNames}`;
+      return matchesVietnameseSearch(targetText, searchTerm);
+    });
+  }, [prescriptions, searchTerm, timeframeFilter]);
+
+  const pagination = useSmartPagination<Prescription>({
+    items: filtered,
+    initialPageSize: 15,
+    resetDependencies: [searchTerm, timeframeFilter],
+  });
 
   return (
     <div className="space-y-6">
@@ -86,7 +112,7 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Tìm theo tên bệnh nhân, mã toa (TOA-...), hoặc chẩn đoán bệnh..."
+          placeholder="Tìm theo tên bệnh nhân, mã toa (TOA-...), chẩn đoán, hoặc tên thuốc đã kê..."
           className="w-full px-2 py-1.5 text-sm text-slate-900 dark:text-slate-100 bg-transparent focus:outline-hidden"
         />
         {searchTerm && (
@@ -97,6 +123,57 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
             Xóa
           </button>
         )}
+      </div>
+
+      {/* Timeframe Filter Buttons */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+          <Calendar className="w-3.5 h-3.5" /> Thời gian:
+        </span>
+        <button
+          type="button"
+          onClick={() => setTimeframeFilter('all')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            timeframeFilter === 'all'
+              ? 'bg-emerald-800 text-white border-emerald-800 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Tất cả toa thuốc ({prescriptions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTimeframeFilter('today')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            timeframeFilter === 'today'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Hôm nay
+        </button>
+        <button
+          type="button"
+          onClick={() => setTimeframeFilter('7days')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            timeframeFilter === '7days'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          7 ngày gần nhất
+        </button>
+        <button
+          type="button"
+          onClick={() => setTimeframeFilter('month')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            timeframeFilter === 'month'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Trong tháng này
+        </button>
       </div>
 
       {/* Prescription List */}
@@ -115,8 +192,9 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {filtered.map((rx) => {
+        <>
+          <div className="space-y-4">
+            {pagination.paginatedItems.map((rx) => {
             const isExpanded = expandedId === rx.id;
             return (
               <div
@@ -354,6 +432,13 @@ export const PrescriptionList: React.FC<PrescriptionListProps> = ({
             );
           })}
         </div>
+        <ClinicPaginationBar
+          pagination={pagination}
+          pageSizeOptions={[15, 30, 50]}
+          itemLabel="đơn thuốc"
+          className="rounded-md border shadow-2xs mt-4"
+        />
+      </>
       )}
 
       {/* Review Modal for Saved Prescriptions */}

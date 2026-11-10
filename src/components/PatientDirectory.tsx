@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Patient } from '../types/medical';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import {
   Users,
   Search,
@@ -10,6 +13,7 @@ import {
   Stethoscope,
   Edit2,
   Trash2,
+  Filter,
 } from 'lucide-react';
 
 interface PatientDirectoryProps {
@@ -28,14 +32,26 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
   onSelectPatientForExam,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'allergies' | 'chronic'>('all');
 
-  const filtered = patients.filter(
-    (p) =>
-      p.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.phone.includes(searchTerm) ||
-      p.patientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.address && p.address.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filtered = useMemo<Patient[]>(() => {
+    return patients.filter((p) => {
+      if (filterType === 'allergies' && (!p.allergies || p.allergies.length === 0)) {
+        return false;
+      }
+      if (filterType === 'chronic' && (!p.chronicConditions || p.chronicConditions.length === 0)) {
+        return false;
+      }
+      const targetText = `${p.fullName} ${p.phone} ${p.patientCode} ${p.healthInsuranceNumber || ''} ${p.address || ''} ${(p.allergies || []).join(' ')} ${(p.chronicConditions || []).join(' ')}`;
+      return matchesVietnameseSearch(targetText, searchTerm);
+    });
+  }, [patients, searchTerm, filterType]);
+
+  const pagination = useSmartPagination<Patient>({
+    items: filtered,
+    initialPageSize: 15,
+    resetDependencies: [searchTerm, filterType],
+  });
 
   return (
     <div className="space-y-6">
@@ -87,6 +103,47 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
         )}
       </div>
 
+      {/* Quick Filters */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+          <Filter className="w-3.5 h-3.5" /> Lọc nhanh:
+        </span>
+        <button
+          type="button"
+          onClick={() => setFilterType('all')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            filterType === 'all'
+              ? 'bg-emerald-800 text-white border-emerald-800 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          Tất cả hồ sơ ({patients.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterType('allergies')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border flex items-center gap-1.5 cursor-pointer ${
+            filterType === 'allergies'
+              ? 'bg-rose-700 text-white border-rose-700 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 hover:bg-rose-50'
+          }`}
+        >
+          <ShieldAlert className="w-3.5 h-3.5" />
+          <span>Có cảnh báo dị ứng</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterType('chronic')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all border cursor-pointer ${
+            filterType === 'chronic'
+              ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+              : 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50'
+          }`}
+        >
+          Tiền sử bệnh mạn tính
+        </button>
+      </div>
+
       {/* Patients List Grid */}
       {filtered.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-md border border-dashed border-slate-200 dark:border-slate-800">
@@ -103,8 +160,9 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((patient) => {
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {pagination.paginatedItems.map((patient) => {
             const age =
               new Date().getFullYear() - (Number(patient.birthYear) || 1970);
             const hasAllergy =
@@ -221,6 +279,13 @@ export const PatientDirectory: React.FC<PatientDirectoryProps> = ({
             );
           })}
         </div>
+        <ClinicPaginationBar
+          pagination={pagination}
+          pageSizeOptions={[15, 30, 50]}
+          itemLabel="bệnh nhân"
+          className="rounded-md border shadow-2xs"
+        />
+      </>
       )}
     </div>
   );

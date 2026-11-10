@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   CrawledDrugItem,
   CrawlerSettings,
   CrawlerStatusResponse,
 } from '../types/crawler';
 import { MedicationCatalogItem } from '../types/medical';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 import {
   getCrawlerStatus,
   getPendingCrawledDrugs,
@@ -463,16 +466,106 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
     await persistSettings(settingsForm);
   };
 
-  // Filtered pending list
-  const filteredItems = pendingItems.filter((item) => {
-    const matchSearch =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.activeIngredient &&
-        item.activeIngredient.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (item.registrationNumber &&
-        item.registrationNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchCat = filterCategory === 'Tất cả' || item.category === filterCategory;
-    return matchSearch && matchCat;
+  // Helper chuyển đổi CrawledDrugItem thành MedicationCatalogItem
+  const convertCrawledToCatalog = (item: CrawledDrugItem): MedicationCatalogItem => ({
+    id: item.id,
+    name: item.name,
+    activeIngredient: item.activeIngredient,
+    strength: item.strength,
+    form: item.form,
+    unit: item.unit,
+    category: item.category,
+    defaultDosage: item.defaultDosage,
+    defaultDurationDays: item.defaultDurationDays || 5,
+    defaultInstructions: item.defaultInstructions || 'Uống theo chỉ dẫn',
+    warningNote: item.warningNote,
+    stockQuantity: 100,
+    unitPrice: 5000,
+  });
+
+  // Duyệt tất cả trên trang hiện tại
+  const handleApproveCurrentPage = async () => {
+    const pageItems = pendingPagination.paginatedItems;
+    if (pageItems.length === 0 || isBulkProcessing) return;
+    setIsBulkProcessing(true);
+    try {
+      const approvedList: MedicationCatalogItem[] = [];
+      for (const item of pageItems) {
+        try {
+          const approved = await approveCrawledDrug(item.id);
+          approvedList.push(convertCrawledToCatalog(approved));
+        } catch {
+          approvedList.push(convertCrawledToCatalog(item));
+        }
+      }
+      const pageItemIds = new Set(pageItems.map((p) => p.id));
+      setPendingItems((prev) => prev.filter((p) => !pageItemIds.has(p.id)));
+      onAddApprovedDrugs(approvedList);
+      showFeedback('success', `Đã duyệt thành công ${approvedList.length} thuốc trên trang hiện tại vào kho phòng khám!`);
+      if (statusData) {
+        setStatusData({
+          ...statusData,
+          pendingCount: Math.max(0, statusData.pendingCount - pageItems.length),
+          approvedCount: statusData.approvedCount + pageItems.length,
+        });
+      }
+    } catch (err: unknown) {
+      showFeedback('error', `Lỗi duyệt trang: ${(err as Error).message}`);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  // Duyệt toàn bộ kết quả đang lọc
+  const handleApproveFiltered = async () => {
+    if (filteredItems.length === 0 || isBulkProcessing) return;
+    if (filteredItems.length === pendingItems.length && !searchTerm && filterCategory === 'Tất cả') {
+      return handleApproveAll();
+    }
+    setIsBulkProcessing(true);
+    try {
+      const approvedList: MedicationCatalogItem[] = [];
+      for (const item of filteredItems) {
+        try {
+          const approved = await approveCrawledDrug(item.id);
+          approvedList.push(convertCrawledToCatalog(approved));
+        } catch {
+          approvedList.push(convertCrawledToCatalog(item));
+        }
+      }
+      const filteredIds = new Set(filteredItems.map((p) => p.id));
+      setPendingItems((prev) => prev.filter((p) => !filteredIds.has(p.id)));
+      onAddApprovedDrugs(approvedList);
+      showFeedback('success', `Đã duyệt thành công toàn bộ ${approvedList.length} thuốc đang lọc vào kho phòng khám!`);
+      if (statusData) {
+        setStatusData({
+          ...statusData,
+          pendingCount: Math.max(0, statusData.pendingCount - filteredItems.length),
+          approvedCount: statusData.approvedCount + filteredItems.length,
+        });
+      }
+    } catch (err: unknown) {
+      showFeedback('error', `Lỗi duyệt danh sách lọc: ${(err as Error).message}`);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  // Filtered pending list with Instant Vietnamese search across 100% data
+  const filteredItems = useMemo(() => {
+    return pendingItems.filter((item) => {
+      const matchCat = filterCategory === 'Tất cả' || item.category === filterCategory;
+      if (!matchCat) return false;
+      if (!searchTerm.trim()) return true;
+      const targetText = `${item.name} ${item.activeIngredient || ''} ${item.registrationNumber || ''} ${item.manufacturer || ''} ${item.category}`;
+      return matchesVietnameseSearch(targetText, searchTerm);
+    });
+  }, [pendingItems, searchTerm, filterCategory]);
+
+  const pendingPagination = useSmartPagination<CrawledDrugItem>({
+    items: filteredItems,
+    initialPageSize: 15,
+    resetDependencies: [searchTerm, filterCategory],
   });
 
   if (!isOpen) return null;
@@ -872,23 +965,29 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
                 </div>
 
                 {pendingItems.length > 0 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={handleApproveAll}
-                      disabled={isBulkProcessing || isCrawling}
-                      className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-semibold rounded-md flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-98"
+                      onClick={handleApproveCurrentPage}
+                      disabled={isBulkProcessing || isCrawling || pendingPagination.paginatedItems.length === 0}
+                      className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-semibold rounded-md flex items-center gap-1 shadow-xs transition-all cursor-pointer active:scale-98"
+                      title="Chỉ duyệt và nạp vào kho các thuốc đang hiển thị trên trang này"
                     >
-                      {isBulkProcessing ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <CheckCheck className="w-3.5 h-3.5" />
-                      )}
-                      <span>Duyệt Tất Cả ({pendingItems.length})</span>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Duyệt trang này ({pendingPagination.paginatedItems.length})</span>
+                    </button>
+                    <button
+                      onClick={handleApproveFiltered}
+                      disabled={isBulkProcessing || isCrawling || filteredItems.length === 0}
+                      className="px-2.5 py-1.5 bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white text-xs font-semibold rounded-md flex items-center gap-1 shadow-xs transition-all cursor-pointer active:scale-98"
+                      title="Duyệt tất cả thuốc khớp với kết quả tìm kiếm/lọc hiện tại"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Duyệt lọc ({filteredItems.length})</span>
                     </button>
                     <button
                       onClick={handleRejectAll}
                       disabled={isBulkProcessing || isCrawling}
-                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 disabled:opacity-50 text-rose-700 dark:text-emerald-300 text-xs font-semibold rounded-md border border-emerald-200 dark:border-rose-900 flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 disabled:opacity-50 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-md border border-rose-200 dark:border-rose-900 flex items-center gap-1 transition-all cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Hủy Tất Cả</span>
@@ -990,8 +1089,9 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
                 </div>
               ) : (
                 (!isCrawling || pendingItems.length > 0) && (
-                  <div className="grid grid-cols-1 gap-3.5">
-                    {filteredItems.map((item) => {
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-3.5">
+                      {pendingPagination.paginatedItems.map((item) => {
                       const isProcessingThis = processingItemId === item.id;
                       const isNewlyCrawled = newlyCrawledIds.has(item.id);
                       return (
@@ -1136,6 +1236,14 @@ export const CrawlerBotModal: React.FC<CrawlerBotModalProps> = ({
                         </div>
                       );
                     })}
+                    </div>
+                    {filteredItems.length > 0 && (
+                      <ClinicPaginationBar
+                        pagination={pendingPagination}
+                        pageSizeOptions={[10, 15, 25, 50]}
+                        itemLabel="thuốc chờ duyệt"
+                      />
+                    )}
                   </div>
                 )
               )}

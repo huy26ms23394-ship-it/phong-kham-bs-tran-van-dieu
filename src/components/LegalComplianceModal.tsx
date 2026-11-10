@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ClinicSettings } from '../types/medical';
 import {
   ShieldCheck,
@@ -14,7 +14,11 @@ import {
   Database,
   History,
   RefreshCw,
+  Search,
 } from 'lucide-react';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 interface LegalComplianceModalProps {
   isOpen: boolean;
@@ -39,6 +43,23 @@ export const LegalComplianceModal: React.FC<LegalComplianceModalProps> = ({
   const [activeTab, setActiveTab] = useState<'vn' | 'ai_transparency' | 'intl' | 'privacy_policy' | 'audit_logs'>('vn');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [auditSearchTerm, setAuditSearchTerm] = useState('');
+
+  // 0ms in-memory search for Audit Logs
+  const filteredAuditLogs = useMemo(() => {
+    if (!auditSearchTerm.trim()) return auditLogs;
+    return auditLogs.filter((log) => {
+      const detailsStr = log.details ? JSON.stringify(log.details) : '';
+      const text = `${log.action} ${log.ip} ${log.status} ${log.timestamp} ${log.userAgent || ''} ${detailsStr}`;
+      return matchesVietnameseSearch(text, auditSearchTerm);
+    });
+  }, [auditLogs, auditSearchTerm]);
+
+  const auditPagination = useSmartPagination<AuditLogEntry>({
+    items: filteredAuditLogs,
+    initialPageSize: 20,
+    resetDependencies: [auditSearchTerm],
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -282,35 +303,50 @@ export const LegalComplianceModal: React.FC<LegalComplianceModalProps> = ({
           {/* TAB 4: NHẬT KÝ AN NINH MẠNG (AUDIT LOGS - ĐIỀU 16 NGHỊ ĐỊNH 333/2026/NĐ-CP) */}
           {activeTab === 'audit_logs' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">
                     <History className="w-4 h-4 text-emerald-600" />
                     <span>Nhật Ký Truy Cập &amp; An Ninh Hệ Thống (Audit Logs)</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {filteredAuditLogs.length} sự kiện
+                    </span>
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Lưu trữ theo Điều 16 Nghị định 333/2026/NĐ-CP (Tối thiểu 12 tháng)
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={fetchAuditLogs}
-                  disabled={isLoadingLogs}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 border border-emerald-300 dark:border-emerald-800 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
-                  <span>Làm mới</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="relative w-48 sm:w-60">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Tìm action, IP, trạng thái..."
+                      value={auditSearchTerm}
+                      onChange={(e) => setAuditSearchTerm(e.target.value)}
+                      className="w-full pl-7 pr-3 py-1 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchAuditLogs}
+                    disabled={isLoadingLogs}
+                    className="px-3 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-1.5 border border-emerald-300 dark:border-emerald-800 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                    <span>Làm mới</span>
+                  </button>
+                </div>
               </div>
 
               <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden shadow-xs">
-                <div className="max-h-[320px] overflow-y-auto font-mono text-[11px] p-3 space-y-2 text-slate-300">
-                  {auditLogs.length === 0 ? (
+                <div className="max-h-[360px] overflow-y-auto font-mono text-[11px] p-3 space-y-2 text-slate-300">
+                  {filteredAuditLogs.length === 0 ? (
                     <div className="text-slate-500 text-center py-6">
-                      Chưa có sự kiện an ninh nào được ghi nhận gần đây.
+                      {auditSearchTerm ? 'Không tìm thấy sự kiện nào khớp với từ khóa tìm kiếm.' : 'Chưa có sự kiện an ninh nào được ghi nhận gần đây.'}
                     </div>
                   ) : (
-                    auditLogs.map((log, idx) => (
+                    auditPagination.paginatedItems.map((log, idx) => (
                       <div key={idx} className="p-2 rounded bg-slate-950/80 border border-slate-800/80 flex flex-col gap-1">
                         <div className="flex items-center justify-between text-[10px]">
                           <span className="text-slate-400">{log.timestamp}</span>
@@ -338,6 +374,14 @@ export const LegalComplianceModal: React.FC<LegalComplianceModalProps> = ({
                   )}
                 </div>
               </div>
+
+              {filteredAuditLogs.length > 0 && (
+                <ClinicPaginationBar
+                  pagination={auditPagination}
+                  pageSizeOptions={[10, 20, 50]}
+                  itemLabel="sự kiện an ninh"
+                />
+              )}
             </div>
           )}
 

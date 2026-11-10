@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Users,
   CheckCircle2,
@@ -14,6 +14,7 @@ import {
   Mail,
   HeartHandshake,
   KeyRound,
+  Search,
 } from 'lucide-react';
 import { ClinicUser, UserRole, UserStatus } from '../types/auth';
 import {
@@ -22,6 +23,9 @@ import {
   preApproveUser,
   deleteUser,
 } from '../utils/authClient';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
 
 interface UserApprovalModalProps {
   isOpen: boolean;
@@ -65,10 +69,38 @@ export const UserApprovalModal: React.FC<UserApprovalModalProps> = ({
     }
   }, [isOpen]);
 
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+
   if (!isOpen) return null;
 
   const pendingUsers = users.filter((u) => u.status === 'PENDING');
   const approvedUsers = users.filter((u) => u.status === 'APPROVED');
+
+  const filteredPendingUsers = useMemo(() => {
+    if (!userSearchTerm.trim()) return pendingUsers;
+    return pendingUsers.filter((u) =>
+      matchesVietnameseSearch(`${u.full_name || ''} ${u.email} ${u.role}`, userSearchTerm)
+    );
+  }, [pendingUsers, userSearchTerm]);
+
+  const pendingPagination = useSmartPagination<ClinicUser>({
+    items: filteredPendingUsers,
+    initialPageSize: 10,
+    resetDependencies: [userSearchTerm],
+  });
+
+  const filteredApprovedUsers = useMemo(() => {
+    if (!userSearchTerm.trim()) return approvedUsers;
+    return approvedUsers.filter((u) =>
+      matchesVietnameseSearch(`${u.full_name || ''} ${u.email} ${u.role}`, userSearchTerm)
+    );
+  }, [approvedUsers, userSearchTerm]);
+
+  const approvedPagination = useSmartPagination<ClinicUser>({
+    items: filteredApprovedUsers,
+    initialPageSize: 10,
+    resetDependencies: [userSearchTerm],
+  });
 
   const handleRoleChange = (email: string, role: UserRole) => {
     setRoleMap((prev) => ({ ...prev, [email]: role }));
@@ -277,146 +309,77 @@ export const UserApprovalModal: React.FC<UserApprovalModalProps> = ({
           {/* TAB 1: PENDING USERS */}
           {tab === 'pending' && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Danh sách tài khoản Google vừa đăng nhập lần đầu và đang chờ bạn phê duyệt:</span>
-                <button
-                  type="button"
-                  onClick={loadUsers}
-                  className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                  Làm mới
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="font-medium">Chờ phê duyệt ({filteredPendingUsers.length} tài khoản):</span>
+                <div className="flex items-center gap-2">
+                  <div className="relative w-44 sm:w-52">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Tìm tên, email..."
+                      value={userSearchTerm}
+                      onChange={(e) => setUserSearchTerm(e.target.value)}
+                      className="w-full pl-7 pr-3 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadUsers}
+                    className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                    Làm mới
+                  </button>
+                </div>
               </div>
 
-              {pendingUsers.length === 0 ? (
+              {filteredPendingUsers.length === 0 ? (
                 <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
                   <HeartHandshake className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
                   <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                    Hiện tại không có tài khoản nào trong phòng chờ!
+                    {userSearchTerm ? 'Không tìm thấy tài khoản chờ duyệt khớp với từ khóa' : 'Hiện tại không có tài khoản nào trong phòng chờ!'}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
                     Khi người thân đăng nhập Google lần đầu, yêu cầu sẽ hiển thị tại đây.
                   </p>
                 </div>
               ) : (
-                pendingUsers.map((u) => (
-                  <div
-                    key={u.id || u.email}
-                    className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {u.avatar_url ? (
-                        <img
-                          src={u.avatar_url}
-                          alt={u.full_name || u.email}
-                          className="w-10 h-10 rounded-full border border-amber-300 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 flex items-center justify-center font-bold shrink-0">
-                          {u.email.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                          {u.full_name || 'Người dùng mới'}
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-600 dark:text-slate-400 truncate">
-                          {u.email}
-                        </div>
-                        <div className="text-[10px] text-amber-700 dark:text-amber-400">
-                          Chờ từ: {new Date(u.requested_at || Date.now()).toLocaleTimeString('vi-VN')} {new Date(u.requested_at || Date.now()).toLocaleDateString('vi-VN')}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <select
-                        value={roleMap[u.email] || u.role || 'DOCTOR'}
-                        onChange={(e) => handleRoleChange(u.email, e.target.value as UserRole)}
-                        className="py-1 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-1 focus:ring-emerald-500"
-                      >
-                        <option value="DOCTOR">Bác Sĩ</option>
-                        <option value="RECEPTIONIST">Lễ Tân</option>
-                        <option value="PHARMACIST">Dược Sĩ / Thu Ngân</option>
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => handleApprove(u.email)}
-                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Duyệt
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRevoke(u.email)}
-                        className="px-2.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900 dark:text-rose-300 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        Từ chối
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: APPROVED USERS */}
-          {tab === 'approved' && (
-            <div className="space-y-3">
-              <div className="text-xs text-slate-500">
-                Danh sách các tài khoản có quyền truy cập vào phần mềm phòng khám:
-              </div>
-
-              {approvedUsers.map((u) => {
-                const isSuperAdmin = u.role === 'SUPER_ADMIN';
-                return (
-                  <div
-                    key={u.id || u.email}
-                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 flex items-center justify-between gap-3 shadow-2xs"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {u.avatar_url ? (
-                        <img
-                          src={u.avatar_url}
-                          alt={u.full_name || u.email}
-                          className="w-9 h-9 rounded-full border border-emerald-500 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
-                          {u.email.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                          <span className="truncate">{u.full_name || u.email}</span>
-                          {isSuperAdmin && (
-                            <span className="px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px] font-bold">
-                              MASTER ADMIN
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-500 truncate">
-                          {u.email} · {getRoleLabel(u.role)}
+                <>
+                  {pendingPagination.paginatedItems.map((u) => (
+                    <div
+                      key={u.id || u.email}
+                      className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {u.avatar_url ? (
+                          <img
+                            src={u.avatar_url}
+                            alt={u.full_name || u.email}
+                            className="w-10 h-10 rounded-full border border-amber-300 object-cover shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 flex items-center justify-center font-bold shrink-0">
+                            {u.email.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                            {u.full_name || 'Người dùng mới'}
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-600 dark:text-slate-400 truncate">
+                            {u.email}
+                          </div>
+                          <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                            Chờ từ: {new Date(u.requested_at || Date.now()).toLocaleTimeString('vi-VN')} {new Date(u.requested_at || Date.now()).toLocaleDateString('vi-VN')}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {!isSuperAdmin && (
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                         <select
-                          value={u.role}
+                          value={roleMap[u.email] || u.role || 'DOCTOR'}
                           onChange={(e) => handleRoleChange(u.email, e.target.value as UserRole)}
-                          onBlur={() => {
-                            if (roleMap[u.email] && roleMap[u.email] !== u.role) {
-                              handleApprove(u.email);
-                            }
-                          }}
-                          className="py-1 px-2 text-[11px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                          className="py-1 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-1 focus:ring-emerald-500"
                         >
                           <option value="DOCTOR">Bác Sĩ</option>
                           <option value="RECEPTIONIST">Lễ Tân</option>
@@ -425,17 +388,132 @@ export const UserApprovalModal: React.FC<UserApprovalModalProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => handleRevoke(u.email)}
-                          title="Khóa hoặc thu hồi quyền truy cập"
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg cursor-pointer transition-colors"
+                          onClick={() => handleApprove(u.email)}
+                          className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
                         >
-                          <Ban className="w-4 h-4" />
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Duyệt
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRevoke(u.email)}
+                          className="px-2.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:hover:bg-rose-900 dark:text-rose-300 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Từ chối
                         </button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </div>
+                  ))}
+                  {filteredPendingUsers.length > 0 && (
+                    <ClinicPaginationBar
+                      pagination={pendingPagination}
+                      pageSizeOptions={[5, 10, 20]}
+                      itemLabel="yêu cầu chờ duyệt"
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: APPROVED USERS */}
+          {tab === 'approved' && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span>Tài khoản đã phê duyệt ({filteredApprovedUsers.length}):</span>
+                <div className="relative w-44 sm:w-52">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Tìm tên, email..."
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                    className="w-full pl-7 pr-3 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {filteredApprovedUsers.length === 0 ? (
+                <div className="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-xs text-slate-500">
+                  Không tìm thấy tài khoản nào khớp với từ khóa tìm kiếm.
+                </div>
+              ) : (
+                <>
+                  {approvedPagination.paginatedItems.map((u) => {
+                    const isSuperAdmin = u.role === 'SUPER_ADMIN';
+                    return (
+                      <div
+                        key={u.id || u.email}
+                        className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 flex items-center justify-between gap-3 shadow-2xs"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {u.avatar_url ? (
+                            <img
+                              src={u.avatar_url}
+                              alt={u.full_name || u.email}
+                              className="w-9 h-9 rounded-full border border-emerald-500 object-cover shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center font-bold text-xs shrink-0">
+                              {u.email.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <span className="truncate">{u.full_name || u.email}</span>
+                              {isSuperAdmin && (
+                                <span className="px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px] font-bold">
+                                  MASTER ADMIN
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-500 truncate">
+                              {u.email} · {getRoleLabel(u.role)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {!isSuperAdmin && (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <select
+                              value={u.role}
+                              onChange={(e) => handleRoleChange(u.email, e.target.value as UserRole)}
+                              onBlur={() => {
+                                if (roleMap[u.email] && roleMap[u.email] !== u.role) {
+                                  handleApprove(u.email);
+                                }
+                              }}
+                              className="py-1 px-2 text-[11px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                            >
+                              <option value="DOCTOR">Bác Sĩ</option>
+                              <option value="RECEPTIONIST">Lễ Tân</option>
+                              <option value="PHARMACIST">Dược Sĩ / Thu Ngân</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRevoke(u.email)}
+                              title="Khóa hoặc thu hồi quyền truy cập"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg cursor-pointer transition-colors"
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filteredApprovedUsers.length > 0 && (
+                    <ClinicPaginationBar
+                      pagination={approvedPagination}
+                      pageSizeOptions={[5, 10, 20]}
+                      itemLabel="thành viên"
+                    />
+                  )}
+                </>
+              )}
             </div>
           )}
 

@@ -25,7 +25,12 @@ import {
   Globe,
   ExternalLink,
   Zap,
+  ArrowUpDown,
 } from 'lucide-react';
+import { useSmartPagination } from '../hooks/useSmartPagination';
+import { ClinicPaginationBar } from './ClinicPaginationBar';
+import { matchesVietnameseSearch } from '../utils/vietnameseSearch';
+import { ensure3000ClinicDrugs } from '../data/vietnam3000DrugsGenerator';
 
 export const getGoogleSearchUrl = (name: string, activeIngredient?: string): string => {
   const query = [name, activeIngredient, 'dược thư chỉ định liều dùng tác dụng'].filter(Boolean).join(' ');
@@ -87,6 +92,8 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isAddingNew, setIsAddingNew] = useState(false);
 
   // Form State for Adding New Medication
@@ -150,19 +157,49 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Filter Catalog
-  const filtered = catalog.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.activeIngredient &&
-        item.activeIngredient.toLowerCase().includes(searchTerm.toLowerCase()));
+  // Filter & Sort Catalog (0ms in-memory trên toàn bộ tập dữ liệu)
+  const filtered = useMemo<MedicationCatalogItem[]>(() => {
+    const list = catalog.filter((item) => {
+      const matchCat = selectedCategory === 'Tất cả' || item.category === selectedCategory;
+      const targetText = `${item.name} ${item.activeIngredient || ''} ${item.category} ${(item as any).registrationNumber || ''} ${(item as any).manufacturer || ''}`;
+      const matchSearch = matchesVietnameseSearch(targetText, searchTerm);
+      return matchCat && matchSearch;
+    });
 
-    const matchesCategory =
-      selectedCategory === 'Tất cả' || item.category === selectedCategory;
+    return list.sort((a, b) => {
+      if (sortBy === 'price') {
+        const pA = a.unitPrice ?? (a as any).estimatedPriceVnd ?? 0;
+        const pB = b.unitPrice ?? (b as any).estimatedPriceVnd ?? 0;
+        return sortOrder === 'asc' ? pA - pB : pB - pA;
+      }
+      if (sortBy === 'stock') {
+        const sA = a.stockQuantity ?? 0;
+        const sB = b.stockQuantity ?? 0;
+        return sortOrder === 'asc' ? sA - sB : sB - sA;
+      }
+      const cmp = a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [catalog, selectedCategory, searchTerm, sortBy, sortOrder]);
 
-    return matchesSearch && matchesCategory;
+  const pagination = useSmartPagination<MedicationCatalogItem>({
+    items: filtered,
+    initialPageSize: 20,
+    resetDependencies: [searchTerm, selectedCategory, sortBy, sortOrder],
   });
+
+  // Nạp 1-click 3.000+ biệt dược thông dụng chuẩn Việt Nam
+  const handleLoadFull3000Drugs = () => {
+    const { catalog: merged, addedCount } = ensure3000ClinicDrugs(catalog);
+    if (addedCount > 0) {
+      if (onBatchUpdateCatalog) {
+        onBatchUpdateCatalog(merged);
+      }
+      showToast(`✓ Đã nạp thành công ${addedCount.toLocaleString('vi-VN')} biệt dược mới! Tổng kho hiện có ${merged.length.toLocaleString('vi-VN')} thuốc.`);
+    } else {
+      showToast(`✓ Toàn bộ ${merged.length.toLocaleString('vi-VN')} biệt dược chuẩn Việt Nam đã có sẵn trong kho phòng khám!`);
+    }
+  };
 
   // Open Edit Dialog for a drug
   const handleOpenEdit = (item: MedicationCatalogItem) => {
@@ -1159,6 +1196,41 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
                     </button>
                   ))}
                 </div>
+
+                {/* Sắp xếp & Nút nạp nhanh 3.000+ biệt dược */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 dark:text-slate-400 font-medium">Sắp xếp:</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="h-8 px-2.5 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-semibold focus:outline-none"
+                    >
+                      <option value="name">Tên biệt dược</option>
+                      <option value="price">Đơn giá bán</option>
+                      <option value="stock">Số lượng tồn kho</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                      className="h-8 px-2.5 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs flex items-center gap-1 font-semibold cursor-pointer"
+                      title="Đảo chiều sắp xếp"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{sortOrder === 'asc' ? 'Tăng dần ↑' : 'Giảm dần ↓'}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLoadFull3000Drugs}
+                    className="h-8 px-3.5 bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-98 cursor-pointer"
+                    title="Nạp toàn bộ 3.000+ biệt dược thông dụng chuẩn Việt Nam vào kho phòng khám"
+                  >
+                    <span>🚀 Nạp Kho Chuẩn 3.000+ Thuốc Thông Dụng VN (1-Click)</span>
+                  </button>
+                </div>
               </div>
 
               {/* Catalog list */}
@@ -1176,8 +1248,9 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {filtered.map((item) => {
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {pagination.paginatedItems.map((item) => {
                     const misclass = detectMisclassifiedDrug(item);
                     return (
                       <div
@@ -1329,6 +1402,14 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
                     );
                   })}
                 </div>
+
+                  <ClinicPaginationBar
+                    pagination={pagination}
+                    pageSizeOptions={[20, 50, 100]}
+                    itemLabel="thuốc"
+                    className="rounded-md border mt-3"
+                  />
+                </>
               )}
             </>
           )}

@@ -17,6 +17,7 @@ import {
   INITIAL_PRESCRIPTIONS,
   CLINIC_MEDICATION_CATALOG,
 } from './data/initialData';
+import { ensure3000ClinicDrugs } from './data/vietnam3000DrugsGenerator';
 import { Navbar } from './components/Navbar';
 import { ConsultationForm } from './components/ConsultationForm';
 import { PatientDirectory } from './components/PatientDirectory';
@@ -124,13 +125,21 @@ export default function App() {
     return INITIAL_PRESCRIPTIONS;
   });
 
-  // Pharmacy Catalog State (44+ Drugs)
+  // Pharmacy Catalog State (Kho 3.000+ Biệt Dược Thông Dụng Việt Nam)
   const [pharmacyCatalog, setPharmacyCatalog] = useState<MedicationCatalogItem[]>(() => {
     try {
       const saved = localStorage.getItem('mediba_pharmacy_catalog_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= 500) {
+          return parsed;
+        }
+        const { catalog } = ensure3000ClinicDrugs(Array.isArray(parsed) ? parsed : CLINIC_MEDICATION_CATALOG);
+        return catalog;
+      }
     } catch {}
-    return CLINIC_MEDICATION_CATALOG;
+    const { catalog } = ensure3000ClinicDrugs(CLINIC_MEDICATION_CATALOG);
+    return catalog;
   });
 
   // Preferred AI Model (gemini-3.5-flash -> gemini-3.8-flash -> gemini-3.5-flash-lite -> gemini-2.5-flash -> offline)
@@ -458,6 +467,11 @@ export default function App() {
   }) => {
     if (!authUser || authUser.status !== 'APPROVED') return;
     try {
+      const fullCatalog = payload?.pharmacyCatalog ?? pharmacyCatalog;
+      const catalogToSync = fullCatalog.length > 500
+        ? fullCatalog.filter((it) => !it.id.startsWith('vn3k-') || (it as any).isCustom)
+        : fullCatalog;
+
       const res = await fetch('/api/clinic/sync', {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -465,7 +479,7 @@ export default function App() {
           clinicInfo: payload?.clinicInfo ?? clinicInfo,
           patients: payload?.patients ?? patients,
           prescriptions: payload?.prescriptions ?? prescriptions,
-          pharmacyCatalog: payload?.pharmacyCatalog ?? pharmacyCatalog,
+          pharmacyCatalog: catalogToSync,
         }),
       });
       if (res.ok) {
@@ -525,7 +539,8 @@ export default function App() {
           setCurrentPrintPrescription(json.data.prescriptions[0]);
         }
         if (Array.isArray(json.data.pharmacyCatalog) && json.data.pharmacyCatalog.length > 0) {
-          setPharmacyCatalog(json.data.pharmacyCatalog);
+          const { catalog: merged } = ensure3000ClinicDrugs(json.data.pharmacyCatalog);
+          setPharmacyCatalog(merged);
         }
         setLastSyncedAt(json.data.updatedAt || new Date().toISOString());
       }
@@ -579,7 +594,8 @@ export default function App() {
               setPrescriptions(json.data.prescriptions);
             }
             if (Array.isArray(json.data.pharmacyCatalog) && json.data.pharmacyCatalog.length > 0) {
-              setPharmacyCatalog(json.data.pharmacyCatalog);
+              const { catalog: merged } = ensure3000ClinicDrugs(json.data.pharmacyCatalog);
+              setPharmacyCatalog(merged);
             }
             setLastSyncedAt(json.data.updatedAt);
           }
