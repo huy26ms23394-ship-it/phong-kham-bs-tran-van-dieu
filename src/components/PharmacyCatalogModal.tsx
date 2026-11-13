@@ -145,20 +145,31 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
     }, 4000);
   };
 
-  // Run Real-time Audit on Catalog
+  // Run Real-time Audit on Catalog (chỉ tính khi modal đang mở để tốn 0ms CPU khi đóng)
   const auditReport: PharmacyAuditReport = useMemo(() => {
+    if (!isOpen) {
+      return {
+        timestamp: '',
+        totalDrugs: catalog.length,
+        duplicateGroups: [],
+        totalDuplicateItems: 0,
+        misclassifiedAlerts: [],
+        incompleteAlerts: [],
+        qualityScore: 100,
+        healthStatus: 'excellent',
+      };
+    }
     return auditPharmacyCatalog(catalog);
-  }, [catalog]);
+  }, [catalog, isOpen]);
 
   const totalAuditIssues =
     auditReport.duplicateGroups.length +
     auditReport.misclassifiedAlerts.length +
     auditReport.incompleteAlerts.length;
 
-  if (!isOpen) return null;
-
-  // Filter & Sort Catalog (0ms in-memory trên toàn bộ tập dữ liệu)
+  // Filter & Sort Catalog (0ms in-memory trên toàn bộ tập dữ liệu, chỉ chạy khi modal mở)
   const filtered = useMemo<MedicationCatalogItem[]>(() => {
+    if (!isOpen) return [];
     const list = catalog.filter((item) => {
       const matchCat = selectedCategory === 'Tất cả' || item.category === selectedCategory;
       const targetText = `${item.name} ${item.activeIngredient || ''} ${item.category} ${(item as any).registrationNumber || ''} ${(item as any).manufacturer || ''}`;
@@ -180,13 +191,15 @@ export const PharmacyCatalogModal: React.FC<PharmacyCatalogModalProps> = ({
       const cmp = a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [catalog, selectedCategory, searchTerm, sortBy, sortOrder]);
+  }, [catalog, selectedCategory, searchTerm, sortBy, sortOrder, isOpen]);
 
   const pagination = useSmartPagination<MedicationCatalogItem>({
     items: filtered,
     initialPageSize: 20,
     resetDependencies: [searchTerm, selectedCategory, sortBy, sortOrder],
   });
+
+  if (!isOpen) return null;
 
   // Nạp 1-click 3.000+ biệt dược thông dụng chuẩn Việt Nam
   const handleLoadFull3000Drugs = () => {

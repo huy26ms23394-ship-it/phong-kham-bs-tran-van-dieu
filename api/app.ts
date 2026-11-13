@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { crawlerService } from './crawlerService.js';
 import { dbService } from './databaseService.js';
+import { tunnelService } from './tunnelService.js';
 import { signToken, verifyToken, verifyMasterAdmin, hashPasswordWithSalt } from './authService.js';
 import { executeGeminiWithFallback, GEMINI_MODEL_CHAIN } from './geminiService.js';
 
@@ -968,8 +969,16 @@ apiRouter.get('/clinic/sync', authMiddleware, async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
     const clientEtag = req.headers['if-none-match'];
     const authUser = (req as any).user;
+    const isLightweight = req.query.light === '1';
+    const isPolling = req.query.poll === '1';
 
-    const { data, etag } = await dbService.getClinicData();
+    // Kiểm tra nhanh ETag trong RAM/SQLite ở tốc độ 0.01ms trước khi đọc payload
+    const fastEtag = dbService.getClinicEtag();
+    if (clientEtag && fastEtag && clientEtag === fastEtag) {
+      return res.status(304).end();
+    }
+
+    const { data, etag } = await dbService.getClinicData({ lightweight: isLightweight });
 
     if (clientEtag && clientEtag === etag) {
       return res.status(304).end();
@@ -977,18 +986,20 @@ apiRouter.get('/clinic/sync', authMiddleware, async (req, res) => {
 
     res.setHeader('ETag', etag);
 
-    dbService.recordAuditLog({
-      action: 'CLINIC_SYNC_PULL',
-      ip: clientIp,
-      status: 'SUCCESS',
-      userAgent: req.headers['user-agent'],
-      details: {
-        user: authUser?.email,
-        role: authUser?.role,
-        patientsCount: (data?.patients as unknown[])?.length || 0,
-        prescriptionsCount: (data?.prescriptions as unknown[])?.length || 0,
-      },
-    });
+    if (!isPolling) {
+      dbService.recordAuditLog({
+        action: 'CLINIC_SYNC_PULL',
+        ip: clientIp,
+        status: 'SUCCESS',
+        userAgent: req.headers['user-agent'],
+        details: {
+          user: authUser?.email,
+          role: authUser?.role,
+          patientsCount: (data?.patients as unknown[])?.length || 0,
+          prescriptionsCount: (data?.prescriptions as unknown[])?.length || 0,
+        },
+      });
+    }
 
     return res.json({ success: true, hasServerData: Boolean(data), data, etag });
   } catch (err: unknown) {
@@ -1020,6 +1031,79 @@ apiRouter.post('/clinic/sync', authMiddleware, async (req, res) => {
 
     res.setHeader('ETag', result.etag);
     return res.json({ success: true, updatedAt: result.updatedAt, etag: result.etag });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+// ================= QUẢN LÝ MẠNG LAN, SQLITE & CLOUDFLARE TUNNEL (CHỈ DÀNH CHO SUPER_ADMIN) =================
+apiRouter.get('/system/network-status', authMiddleware, adminOnlyMiddleware, (_req, res) => {
+  try {
+    const sqliteDiag = dbService.getSqliteDiagnostics();
+    const status = tunnelService.getStatus(sqliteDiag);
+    return res.json({
+      success: true,
+      ...status,
+      sqliteDiagnostics: sqliteDiag,
+    });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+apiRouter.post('/system/tunnel/start', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const authUser = (req as any).user;
+
+    const result = await tunnelService.startTunnel();
+    const sqliteDiag = dbService.getSqliteDiagnostics();
+    const fullStatus = tunnelService.getStatus(sqliteDiag);
+
+    await dbService.recordAuditLog({
+      action: 'CLOUDFLARE_TUNNEL_START',
+      ip: clientIp,
+      status: result.success ? 'SUCCESS' : 'FAILURE',
+      userAgent: req.headers['user-agent'],
+      details: {
+        admin: authUser?.email,
+        publicUrl: result.publicUrl,
+        tunnelStatus: result.status,
+      },
+    });
+
+    return res.json({
+      ...result,
+      network: fullStatus,
+    });
+  } catch (err: unknown) {
+    return res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+apiRouter.post('/system/tunnel/stop', authMiddleware, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+    const authUser = (req as any).user;
+
+    const result = tunnelService.stopTunnel();
+    const sqliteDiag = dbService.getSqliteDiagnostics();
+    const fullStatus = tunnelService.getStatus(sqliteDiag);
+
+    await dbService.recordAuditLog({
+      action: 'CLOUDFLARE_TUNNEL_STOP',
+      ip: clientIp,
+      status: 'SUCCESS',
+      userAgent: req.headers['user-agent'],
+      details: {
+        admin: authUser?.email,
+      },
+    });
+
+    return res.json({
+      ...result,
+      network: fullStatus,
+    });
   } catch (err: unknown) {
     return res.status(500).json({ success: false, error: (err as Error).message });
   }

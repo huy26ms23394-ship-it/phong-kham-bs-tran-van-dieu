@@ -32,6 +32,9 @@ export default defineConfig(() => {
               ],
             },
     },
+    build: {
+      chunkSizeWarningLimit: 1600,
+    },
     preview: {
       host: true,
       port: 3001,

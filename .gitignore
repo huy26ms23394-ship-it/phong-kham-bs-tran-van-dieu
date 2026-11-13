@@ -18,6 +18,8 @@ coverage/
 # Sensitive Medical Audit Logs & Local Runtime Caches
 server_data/audit_logs.jsonl
 server_data/crawler_store.json
+server_data/*.sqlite-shm
+server_data/*.sqlite-wal
 *.log
 
 # System files

@@ -52,6 +52,7 @@ interface NavbarProps {
   onOpenShortcuts?: () => void;
   onOpenUserGuide?: () => void;
   onOpenLanConnect?: () => void;
+  isTunnelActive?: boolean;
   totalPatientsCount: number;
   totalPrescriptionsCount: number;
   googleUser: GoogleUser;
@@ -94,6 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenShortcuts,
   onOpenUserGuide,
   onOpenLanConnect,
+  isTunnelActive = false,
   totalPatientsCount,
   totalPrescriptionsCount,
   googleUser,
@@ -218,16 +220,36 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Quick LAN / iPhone Connect (Tablet & Desktop: md+) */}
+            {/* Quick Remote Access & LAN Connect Button */}
             {onOpenLanConnect && (
               <button
                 type="button"
                 onClick={onOpenLanConnect}
-                className="hidden md:flex h-8.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 rounded-md font-bold text-xs items-center gap-1.5 transition-colors border border-emerald-200 dark:border-emerald-800/80 cursor-pointer"
-                title="Kết nối iPhone / Điện thoại cùng mạng Wi-Fi nội bộ (Quét mã QR)"
+                className={`flex h-8.5 px-2.5 rounded-md font-bold text-xs items-center gap-1.5 transition-all border cursor-pointer ${
+                  isTunnelActive
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-xs'
+                    : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/80'
+                }`}
+                title={
+                  isTunnelActive
+                    ? '🌐 Đang Mở Internet (Cloudflare Tunnel Active) - Nhấn để lấy link HTTPS & Mã QR'
+                    : '🏠 Chỉ Mạng Nội Bộ (Local/LAN) - Nhấn để bật Cloudflare Tunnel hoặc lấy QR Wi-Fi'
+                }
               >
-                <Wifi className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" aria-hidden="true" />
-                <span className="hidden lg:inline">iPhone / LAN</span>
+                <span className="relative flex h-2 w-2 shrink-0">
+                  {isTunnelActive && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      isTunnelActive ? 'bg-white' : 'bg-emerald-500'
+                    }`}
+                  ></span>
+                </span>
+                <Wifi className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="hidden lg:inline">
+                  {isTunnelActive ? '🌐 Đang Mở Internet' : '🏠 Mạng Nội Bộ / Tunnel'}
+                </span>
               </button>
             )}
 

@@ -1,6 +1,7 @@
 import { Patient, PrescribedMedication, MedicationCatalogItem } from '../types/medical';
 import { getAuthHeaders } from './authClient';
 import { runComprehensiveLocalSafetyCheck, ClinicalRuleAlert } from './clinicalRules';
+import { EXPANDED_OUTPATIENT_MEDICATIONS } from '../data/expandedMedications';
 import {
   evaluateFiveTierSafety,
   FiveTierSafetyReport,
@@ -496,7 +497,6 @@ export async function lookupDrugFromPharmacopoeia(drugName: string, model?: stri
 
   // 2. Offline fallback from expanded outpatient drug database
   try {
-    const { EXPANDED_OUTPATIENT_MEDICATIONS } = await import('../data/expandedMedications');
     const q = drugName.toLowerCase().trim();
     const found = EXPANDED_OUTPATIENT_MEDICATIONS.find(
       (m) =>

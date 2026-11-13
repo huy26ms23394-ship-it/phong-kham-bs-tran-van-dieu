@@ -3,10 +3,16 @@
  * Dành riêng cho Phòng Khám BS. Trần Văn Diệu
  */
 
+const TONE_CACHE_MAX = 15000;
+const toneCache = new Map<string, string>();
+
 export function removeVietnameseTones(str: string): string {
   if (!str) return '';
-  return str
-    .toString()
+  const raw = typeof str === 'string' ? str : String(str);
+  const cached = toneCache.get(raw);
+  if (cached !== undefined) return cached;
+
+  const cleaned = raw
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[đĐ]/g, 'd')
@@ -14,6 +20,12 @@ export function removeVietnameseTones(str: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  if (toneCache.size >= TONE_CACHE_MAX) {
+    toneCache.clear();
+  }
+  toneCache.set(raw, cleaned);
+  return cleaned;
 }
 
 /**

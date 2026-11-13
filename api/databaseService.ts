@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import pg from 'pg';
-
-const { Pool } = pg;
+import Database from 'better-sqlite3';
+import { ensure3000ClinicDrugs } from '../src/data/vietnam3000DrugsGenerator.js';
 
 export interface ClinicSyncPayload {
   clinicInfo?: Record<string, unknown>;
@@ -41,24 +40,37 @@ export interface AuthorizedUser {
   updated_at?: string;
 }
 
+export interface SqliteDiagnostics {
+  enabled: boolean;
+  dbPath: string;
+  sizeBytes: number;
+  walMode: boolean;
+  patientsCount: number;
+  prescriptionsCount: number;
+  drugsCount: number;
+  auditLogsCount: number;
+}
+
 export class DatabaseService {
   private static instance: DatabaseService;
   private readonly dataDir: string;
+  private readonly sqliteDbFile: string;
   private readonly clinicDbFile: string;
   private readonly rootClinicDbFile: string;
   private readonly auditLogsFile: string;
 
-  private pgPool: pg.Pool | null = null;
-  private isPgConnected: boolean = false;
-  private isTableInitialized: boolean = false;
-
-  private readonly supabaseUrl?: string;
-  private readonly supabaseKey?: string;
+  private sqliteDb: Database.Database | null = null;
+  private isSqliteReady: boolean = false;
   private localUsers: Map<string, AuthorizedUser> = new Map();
   private localAdminPasswordHash: string | null = null;
+  private cachedClinicData: ClinicSyncPayload | null = null;
+  private cachedLightClinicData: ClinicSyncPayload | null = null;
+  private cachedEtag: string = '';
+  private cachedDiagnostics: { data: SqliteDiagnostics; timestamp: number } | null = null;
 
   private constructor() {
     this.dataDir = process.env.VERCEL ? '/tmp/server_data' : path.resolve(process.cwd(), 'server_data');
+    this.sqliteDbFile = path.join(this.dataDir, 'clinic.sqlite');
     this.clinicDbFile = path.join(this.dataDir, 'clinic_db.json');
     this.rootClinicDbFile = path.resolve(process.cwd(), 'server_data', 'clinic_db.json');
     this.auditLogsFile = path.join(this.dataDir, 'audit_logs.jsonl');
@@ -75,37 +87,8 @@ export class DatabaseService {
       updated_at: new Date().toISOString(),
     });
 
-    const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (dbUrl) {
-      try {
-        let connectionString = dbUrl;
-        try {
-          // Xóa tham số sslmode khỏi connection string để tránh pg-connection-string ghi đè thành ssl: true
-          const parsed = new URL(dbUrl);
-          parsed.searchParams.delete('sslmode');
-          parsed.searchParams.delete('ssl');
-          connectionString = parsed.toString();
-        } catch {}
-
-        this.pgPool = new Pool({
-          connectionString,
-          ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
-          max: 5,
-          idleTimeoutMillis: 10000,
-          connectionTimeoutMillis: 5000,
-        });
-        this.isPgConnected = true;
-      } catch (err) {
-        console.warn('[DatabaseService] Không thể kết nối DATABASE_URL, sẽ fallback:', err);
-      }
-    }
-
-    this.supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    this.supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
-    if (!process.env.VERCEL) {
-      this.ensureLocalDir();
-    }
+    this.ensureLocalDir();
+    this.initSqliteDatabase();
   }
 
   public static getInstance(): DatabaseService {
@@ -131,34 +114,53 @@ export class DatabaseService {
   }
 
   /**
-   * Khởi tạo bảng Cloud DB (clinic_store, audit_logs) và tự động nạp seed data
+   * Khởi tạo cơ sở dữ liệu SQLite cục bộ siêu tốc (better-sqlite3) với chế độ WAL
+   * và tự động migrate dữ liệu từ clinic_db.json, kho 3.000+ thuốc & audit_logs.jsonl
    */
-  public async ensureCloudTables(): Promise<void> {
-    if (!this.pgPool || this.isTableInitialized) return;
-
+  private initSqliteDatabase(): void {
     try {
-      await this.pgPool.query(`
+      this.sqliteDb = new Database(this.sqliteDbFile);
+
+      // Bật chế độ WAL (Write-Ahead Logging) để đọc/ghi 0.1ms và chống hỏng dữ liệu khi mất điện
+      this.sqliteDb.pragma('journal_mode = WAL');
+      this.sqliteDb.pragma('synchronous = NORMAL');
+      this.sqliteDb.pragma('foreign_keys = ON');
+      this.sqliteDb.pragma('busy_timeout = 5000');
+
+      // Tạo các bảng chuẩn hóa
+      this.sqliteDb.exec(`
         CREATE TABLE IF NOT EXISTS clinic_store (
           id TEXT PRIMARY KEY,
-          data JSONB NOT NULL,
-          etag TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW()
+          data TEXT NOT NULL,
+          etag TEXT NOT NULL,
+          version INTEGER DEFAULT 1,
+          updated_at TEXT NOT NULL
         );
-      `);
 
-      await this.pgPool.query(`
-        CREATE TABLE IF NOT EXISTS audit_logs (
-          id BIGSERIAL PRIMARY KEY,
-          timestamp TIMESTAMPTZ,
-          action TEXT,
-          ip TEXT,
-          status TEXT,
-          user_agent TEXT,
-          details JSONB
+        CREATE TABLE IF NOT EXISTS patients (
+          id TEXT PRIMARY KEY,
+          full_name TEXT,
+          phone TEXT,
+          data TEXT NOT NULL,
+          updated_at TEXT NOT NULL
         );
-      `);
 
-      await this.pgPool.query(`
+        CREATE TABLE IF NOT EXISTS prescriptions (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT,
+          diagnosis TEXT,
+          data TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS pharmacy_catalog (
+          id TEXT PRIMARY KEY,
+          name TEXT,
+          category TEXT,
+          data TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS authorized_users (
           id TEXT PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
@@ -166,34 +168,71 @@ export class DatabaseService {
           avatar_url TEXT,
           role TEXT DEFAULT 'DOCTOR',
           status TEXT DEFAULT 'PENDING',
-          requested_at TIMESTAMPTZ DEFAULT NOW(),
+          requested_at TEXT NOT NULL,
           approved_by TEXT,
-          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TEXT NOT NULL,
           password_hash TEXT
         );
-        ALTER TABLE authorized_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+
+        CREATE TABLE IF NOT EXISTS audit_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp TEXT NOT NULL,
+          action TEXT NOT NULL,
+          ip TEXT,
+          status TEXT,
+          user_agent TEXT,
+          details TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_pharmacy_category ON pharmacy_catalog(category);
       `);
 
+      // Đảm bảo tài khoản Master Admin luôn tồn tại và APPROVED trong SQLite
       const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
-      await this.pgPool.query(
-        `INSERT INTO authorized_users (id, email, full_name, role, status, requested_at, approved_by, updated_at)
-         VALUES ($1, $2, $3, 'SUPER_ADMIN', 'APPROVED', NOW(), 'SYSTEM_INITIAL', NOW())
-         ON CONFLICT (email) DO UPDATE SET role = 'SUPER_ADMIN', status = 'APPROVED'`,
-        ['usr_admin_master', adminEmail, 'Bác Sĩ Trần Văn Diệu (Master Admin)']
-      );
+      const now = new Date().toISOString();
+      this.sqliteDb
+        .prepare(
+          `INSERT INTO authorized_users (id, email, full_name, role, status, requested_at, approved_by, updated_at)
+           VALUES (?, ?, ?, 'SUPER_ADMIN', 'APPROVED', ?, 'SYSTEM_INITIAL', ?)
+           ON CONFLICT(email) DO UPDATE SET role = 'SUPER_ADMIN', status = 'APPROVED'`
+        )
+        .run('usr_admin_master', adminEmail, 'Bác Sĩ Trần Văn Diệu (Master Admin)', now, now);
 
-      // Kiểm tra seed data
-      const checkRes = await this.pgPool.query(`SELECT id FROM clinic_store WHERE id = 'default' LIMIT 1`);
-      if (checkRes.rowCount === 0) {
-        let seedData: ClinicSyncPayload = {
-          clinicInfo: {},
-          patients: [],
-          prescriptions: [],
-          pharmacyCatalog: [],
-          updatedAt: new Date().toISOString(),
-          version: 1,
-        };
+      this.migrateLegacyDataToSqlite();
+      this.isSqliteReady = true;
+      console.log(`⚡ [SQLite Local Engine] Đã kích hoạt tại: ${this.sqliteDbFile} (WAL Mode = ON)`);
+    } catch (err) {
+      console.error('[DatabaseService] Không thể khởi tạo SQLite, chuyển sang fallback JSON:', err);
+      this.sqliteDb = null;
+      this.isSqliteReady = false;
+    }
+  }
 
+  /**
+   * Tự động chuyển đổi (migrate) dữ liệu từ clinic_db.json, kho 3.000+ thuốc và audit_logs.jsonl vào clinic.sqlite
+   */
+  private migrateLegacyDataToSqlite(): void {
+    if (!this.sqliteDb) return;
+
+    try {
+      // 1. Migrate clinic_db.json + Kho 3.000+ thuốc
+      const existingRow = this.sqliteDb
+        .prepare(`SELECT data, etag, version FROM clinic_store WHERE id = 'default' LIMIT 1`)
+        .get() as { data: string; etag: string; version: number } | undefined;
+
+      let shouldUpdateStore = false;
+      let storeData: ClinicSyncPayload = {
+        clinicInfo: {},
+        patients: [],
+        prescriptions: [],
+        pharmacyCatalog: [],
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      };
+
+      if (!existingRow) {
+        shouldUpdateStore = true;
         const targetSeedFile = fs.existsSync(this.clinicDbFile)
           ? this.clinicDbFile
           : fs.existsSync(this.rootClinicDbFile)
@@ -202,66 +241,206 @@ export class DatabaseService {
 
         if (targetSeedFile) {
           try {
-            seedData = JSON.parse(fs.readFileSync(targetSeedFile, 'utf-8'));
-          } catch {}
+            const parsed = JSON.parse(fs.readFileSync(targetSeedFile, 'utf-8')) as ClinicSyncPayload;
+            storeData = { ...storeData, ...parsed };
+            console.log(`[SQLite Migration] Đã đọc dữ liệu gốc từ ${path.basename(targetSeedFile)}`);
+          } catch (e) {
+            console.warn('[SQLite Migration] Không thể parse clinic_db.json:', e);
+          }
         }
-
-        const etag = this.generateETag(seedData);
-        await this.pgPool.query(
-          `INSERT INTO clinic_store (id, data, etag, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (id) DO NOTHING`,
-          ['default', JSON.stringify(seedData), etag]
-        );
-        console.log('[DatabaseService] Đã nạp seed data vào Cloud Database thành công!');
+      } else {
+        try {
+          storeData = JSON.parse(existingRow.data) as ClinicSyncPayload;
+        } catch {}
       }
 
-      this.isTableInitialized = true;
+      // Đảm bảo kho thuốc trong SQLite luôn có đủ 3.000+ biệt dược thông dụng Việt Nam
+      const currentCatalog = Array.isArray(storeData.pharmacyCatalog) ? (storeData.pharmacyCatalog as any[]) : [];
+      if (currentCatalog.length < 500) {
+        const { catalog: expandedCatalog } = ensure3000ClinicDrugs(currentCatalog);
+        storeData.pharmacyCatalog = expandedCatalog;
+        shouldUpdateStore = true;
+        console.log(`[SQLite Migration] Đã nạp chuẩn hóa ${expandedCatalog.length} biệt dược Việt Nam vào clinic.sqlite!`);
+      }
+
+      if (shouldUpdateStore) {
+        const now = new Date().toISOString();
+        storeData.updatedAt = storeData.updatedAt || now;
+        storeData.version = Number(storeData.version) || 1;
+        const serialized = JSON.stringify(storeData);
+        const etag = this.generateETag(serialized);
+
+        const migrateTx = this.sqliteDb.transaction(() => {
+          this.sqliteDb!
+            .prepare(
+              `INSERT INTO clinic_store (id, data, etag, version, updated_at)
+               VALUES ('default', ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET data = excluded.data, etag = excluded.etag, version = excluded.version, updated_at = excluded.updated_at`
+            )
+            .run(serialized, etag, storeData.version, now);
+
+          this.syncNormalizedTables(storeData, now);
+        });
+        migrateTx();
+      }
+
+      // 2. Migrate audit_logs.jsonl vào bảng audit_logs nếu bảng đang trống
+      const auditCountRow = this.sqliteDb.prepare(`SELECT COUNT(*) as cnt FROM audit_logs`).get() as { cnt: number };
+      if (auditCountRow.cnt === 0 && fs.existsSync(this.auditLogsFile)) {
+        const rawLogs = fs.readFileSync(this.auditLogsFile, 'utf-8');
+        const lines = rawLogs.trim().split('\n').filter(Boolean);
+        if (lines.length > 0) {
+          const insertLogStmt = this.sqliteDb.prepare(
+            `INSERT INTO audit_logs (timestamp, action, ip, status, user_agent, details)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          );
+          const logTx = this.sqliteDb.transaction((logLines: string[]) => {
+            for (const line of logLines) {
+              try {
+                const entry = JSON.parse(line) as AuditLogEntry;
+                insertLogStmt.run(
+                  entry.timestamp || new Date().toISOString(),
+                  entry.action || 'UNKNOWN',
+                  entry.ip || '127.0.0.1',
+                  entry.status || 'SUCCESS',
+                  entry.userAgent || 'Client',
+                  JSON.stringify(entry.details || {})
+                );
+              } catch {}
+            }
+          });
+          logTx(lines);
+          console.log(`[SQLite Migration] Đã chuyển đổi ${lines.length} dòng nhật ký an ninh từ audit_logs.jsonl vào clinic.sqlite!`);
+        }
+      }
     } catch (err) {
-      console.error('[DatabaseService] Lỗi khi tạo bảng Cloud DB:', err);
+      console.error('[DatabaseService] Lỗi trong quá trình migrate dữ liệu sang SQLite:', err);
     }
   }
 
   /**
-   * Đọc dữ liệu phòng khám (Postgres -> Supabase REST -> Local Fallback)
+   * Đồng bộ dữ liệu sang các bảng quan hệ (patients, prescriptions, pharmacy_catalog) trong SQLite
    */
-  public async getClinicData(): Promise<{ data: ClinicSyncPayload | null; etag: string }> {
-    // 1. Ưu tiên PostgreSQL Pool
-    if (this.pgPool) {
-      try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(`SELECT data, etag FROM clinic_store WHERE id = 'default' LIMIT 1`);
-        if (res.rowCount && res.rows[0]) {
-          const rowData = res.rows[0].data as ClinicSyncPayload;
-          const etag = res.rows[0].etag || this.generateETag(rowData);
-          return { data: rowData, etag };
-        }
-      } catch (err) {
-        console.error('[DatabaseService] Lỗi đọc Postgres, thử tiếp fallback:', err);
-      }
-    }
+  private syncNormalizedTables(payload: ClinicSyncPayload, timestamp: string): void {
+    if (!this.sqliteDb) return;
 
-    // 2. Thử Supabase REST API
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/clinic_store?id=eq.default&select=*`, {
-          headers: {
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
-        });
-        if (res.ok) {
-          const rows = (await res.json()) as Array<{ data: ClinicSyncPayload; etag?: string }>;
-          if (rows && rows.length > 0) {
-            const data = rows[0].data;
-            const etag = rows[0].etag || this.generateETag(data);
-            return { data, etag };
+    try {
+      if (Array.isArray(payload.patients)) {
+        const upsertPatient = this.sqliteDb.prepare(
+          `INSERT INTO patients (id, full_name, phone, data, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET full_name = excluded.full_name, phone = excluded.phone, data = excluded.data, updated_at = excluded.updated_at`
+        );
+        for (const p of payload.patients as any[]) {
+          if (p && p.id) {
+            upsertPatient.run(String(p.id), String(p.fullName || ''), String(p.phone || ''), JSON.stringify(p), timestamp);
           }
         }
+      }
+
+      if (Array.isArray(payload.prescriptions)) {
+        const upsertRx = this.sqliteDb.prepare(
+          `INSERT INTO prescriptions (id, patient_id, diagnosis, data, created_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET patient_id = excluded.patient_id, diagnosis = excluded.diagnosis, data = excluded.data`
+        );
+        for (const rx of payload.prescriptions as any[]) {
+          if (rx && rx.id) {
+            upsertRx.run(
+              String(rx.id),
+              String(rx.patientId || ''),
+              String(rx.diagnosis || ''),
+              JSON.stringify(rx),
+              String(rx.date || rx.createdAt || timestamp)
+            );
+          }
+        }
+      }
+
+      if (Array.isArray(payload.pharmacyCatalog)) {
+        const catalogCount = (this.sqliteDb.prepare(`SELECT COUNT(*) as cnt FROM pharmacy_catalog`).get() as { cnt: number }).cnt;
+        // Chỉ ghi lại toàn bộ 3.000+ thuốc nếu số lượng thay đổi hoặc chưa khởi tạo để giữ tốc độ ghi 0.1ms
+        if (catalogCount === 0 || Math.abs(catalogCount - payload.pharmacyCatalog.length) > 0) {
+          const upsertDrug = this.sqliteDb.prepare(
+            `INSERT INTO pharmacy_catalog (id, name, category, data, updated_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category, data = excluded.data, updated_at = excluded.updated_at`
+          );
+          for (const d of payload.pharmacyCatalog as any[]) {
+            if (d && d.id) {
+              upsertDrug.run(String(d.id), String(d.name || ''), String(d.category || ''), JSON.stringify(d), timestamp);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[DatabaseService] Lỗi đồng bộ bảng con SQLite:', err);
+    }
+  }
+
+  private buildLightweightPayload(full: ClinicSyncPayload): ClinicSyncPayload {
+    return {
+      ...full,
+      pharmacyCatalog: Array.isArray(full.pharmacyCatalog)
+        ? (full.pharmacyCatalog as any[]).filter((d) => !String(d?.id || '').startsWith('vn3k-') || Boolean(d?.isCustom))
+        : [],
+    };
+  }
+
+  /**
+   * Đọc nhanh ETag hiện tại từ RAM hoặc SQLite mà không cần JSON.parse cột data (0.01ms)
+   */
+  public getClinicEtag(): string {
+    if (this.cachedEtag) return this.cachedEtag;
+    if (this.sqliteDb && this.isSqliteReady) {
+      try {
+        const row = this.sqliteDb
+          .prepare(`SELECT etag FROM clinic_store WHERE id = 'default' LIMIT 1`)
+          .get() as { etag?: string } | undefined;
+        if (row?.etag) {
+          this.cachedEtag = row.etag;
+          return row.etag;
+        }
+      } catch {}
+    }
+    return '';
+  }
+
+  /**
+   * Đọc dữ liệu phòng khám (Ưu tiên RAM Cache -> Local SQLite 0.1ms -> Fallback JSON)
+   */
+  public async getClinicData(options?: { lightweight?: boolean }): Promise<{ data: ClinicSyncPayload | null; etag: string }> {
+    if (this.cachedClinicData && this.cachedEtag) {
+      return {
+        data: options?.lightweight && this.cachedLightClinicData ? this.cachedLightClinicData : this.cachedClinicData,
+        etag: this.cachedEtag,
+      };
+    }
+
+    // 1. Ưu tiên đọc từ Local SQLite (0.1ms)
+    if (this.sqliteDb && this.isSqliteReady) {
+      try {
+        const row = this.sqliteDb
+          .prepare(`SELECT data, etag FROM clinic_store WHERE id = 'default' LIMIT 1`)
+          .get() as { data: string; etag: string } | undefined;
+
+        if (row && row.data) {
+          const parsed = JSON.parse(row.data) as ClinicSyncPayload;
+          const etag = row.etag || this.generateETag(row.data);
+          this.cachedClinicData = parsed;
+          this.cachedLightClinicData = this.buildLightweightPayload(parsed);
+          this.cachedEtag = etag;
+          return {
+            data: options?.lightweight ? this.cachedLightClinicData : parsed,
+            etag,
+          };
+        }
       } catch (err) {
-        console.error('[DatabaseService] Lỗi đọc Supabase REST:', err);
+        console.error('[DatabaseService] Lỗi đọc clinic.sqlite:', err);
       }
     }
 
-    // 3. Fallback đọc Local JSON File
+    // 2. Fallback đọc Local JSON File
     try {
       const targetFile = fs.existsSync(this.clinicDbFile)
         ? this.clinicDbFile
@@ -272,7 +451,13 @@ export class DatabaseService {
         const raw = fs.readFileSync(targetFile, 'utf-8');
         const data = JSON.parse(raw) as ClinicSyncPayload;
         const etag = this.generateETag(data);
-        return { data, etag };
+        this.cachedClinicData = data;
+        this.cachedLightClinicData = this.buildLightweightPayload(data);
+        this.cachedEtag = etag;
+        return {
+          data: options?.lightweight ? this.cachedLightClinicData : data,
+          etag,
+        };
       }
     } catch (err) {
       console.error('[DatabaseService] Lỗi đọc clinic_db.json local:', err);
@@ -282,74 +467,68 @@ export class DatabaseService {
   }
 
   /**
-   * Lưu dữ liệu phòng khám
+   * Lưu dữ liệu phòng khám vào Local SQLite (kèm bản sao JSON dự phòng)
    */
-  public async saveClinicData(rawIncoming: Partial<ClinicSyncPayload> | { data: Partial<ClinicSyncPayload> }): Promise<{ success: boolean; updatedAt: string; etag: string }> {
+  public async saveClinicData(
+    rawIncoming: Partial<ClinicSyncPayload> | { data: Partial<ClinicSyncPayload> }
+  ): Promise<{ success: boolean; updatedAt: string; etag: string }> {
     const incoming = (rawIncoming as any)?.data ? (rawIncoming as any).data : rawIncoming;
     const current = (await this.getClinicData()).data || {};
     const updatedAt = new Date().toISOString();
     const version = ((current.version as number) || 0) + 1;
+
+    // Nếu client gửi danh mục thuốc rút gọn (đã lọc bỏ vn3k- để tiết kiệm băng thông), tự động ghép lại với kho 3.000+ thuốc
+    let mergedCatalog = current.pharmacyCatalog;
+    if (incoming.pharmacyCatalog !== undefined && Array.isArray(incoming.pharmacyCatalog)) {
+      mergedCatalog = ensure3000ClinicDrugs(incoming.pharmacyCatalog as any[]).catalog;
+    }
 
     const merged: ClinicSyncPayload = {
       ...current,
       ...(incoming.clinicInfo !== undefined ? { clinicInfo: incoming.clinicInfo } : {}),
       ...(incoming.patients !== undefined ? { patients: incoming.patients } : {}),
       ...(incoming.prescriptions !== undefined ? { prescriptions: incoming.prescriptions } : {}),
-      ...(incoming.pharmacyCatalog !== undefined ? { pharmacyCatalog: incoming.pharmacyCatalog } : {}),
+      ...(mergedCatalog !== undefined ? { pharmacyCatalog: mergedCatalog } : {}),
       ...(incoming.prescriptionTemplate !== undefined ? { prescriptionTemplate: incoming.prescriptionTemplate } : {}),
       updatedAt,
       version,
     };
 
-    const etag = this.generateETag(merged);
+    const serialized = JSON.stringify(merged);
+    const etag = this.generateETag(serialized);
 
-    // 1. Lưu qua PostgreSQL
-    if (this.pgPool) {
+    // 1. Lưu trực tiếp vào Local SQLite với Transaction nguyên tử (Atomic WAL Transaction)
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        await this.pgPool.query(
-          `INSERT INTO clinic_store (id, data, etag, updated_at) 
-           VALUES ($1, $2, $3, NOW()) 
-           ON CONFLICT (id) DO UPDATE SET data = $2, etag = $3, updated_at = NOW()`,
-          ['default', JSON.stringify(merged), etag]
-        );
-        return { success: true, updatedAt, etag };
-      } catch (err) {
-        console.error('[DatabaseService] Lỗi lưu Postgres:', err);
-      }
-    }
+        const saveTx = this.sqliteDb.transaction(() => {
+          this.sqliteDb!
+            .prepare(
+              `INSERT INTO clinic_store (id, data, etag, version, updated_at)
+               VALUES ('default', ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET data = excluded.data, etag = excluded.etag, version = excluded.version, updated_at = excluded.updated_at`
+            )
+            .run(serialized, etag, version, updatedAt);
 
-    // 2. Lưu qua Supabase REST
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        await fetch(`${this.supabaseUrl}/rest/v1/clinic_store?on_conflict=id`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-            Prefer: 'resolution=merge-duplicates',
-          },
-          body: JSON.stringify({
-            id: 'default',
-            data: merged,
-            etag,
-            updated_at: updatedAt,
-          }),
+          this.syncNormalizedTables(merged, updatedAt);
         });
-        return { success: true, updatedAt, etag };
+        saveTx();
       } catch (err) {
-        console.error('[DatabaseService] Lỗi lưu Supabase REST:', err);
+        console.error('[DatabaseService] Lỗi lưu vào clinic.sqlite:', err);
       }
     }
 
-    // 3. Fallback lưu Local File
+    // 2. Cập nhật RAM Cache ngay lập tức & ghi đồng thời bản backup ra clinic_db.json
+    this.cachedClinicData = merged;
+    this.cachedLightClinicData = this.buildLightweightPayload(merged);
+    this.cachedEtag = etag;
+    this.cachedDiagnostics = null;
+
     if (!process.env.VERCEL) {
       try {
         this.ensureLocalDir();
-        fs.writeFileSync(this.clinicDbFile, JSON.stringify(merged, null, 2), 'utf-8');
+        fs.writeFileSync(this.clinicDbFile, JSON.stringify(this.cachedLightClinicData, null, 2), 'utf-8');
       } catch (err) {
-        console.error('[DatabaseService] Lỗi lưu file local:', err);
+        console.error('[DatabaseService] Lỗi lưu file JSON backup:', err);
       }
     }
 
@@ -357,7 +536,7 @@ export class DatabaseService {
   }
 
   /**
-   * Ghi Audit Log an ninh theo Nghị định 333/2026/NĐ-CP
+   * Ghi Audit Log an ninh theo Nghị định 333/2026/NĐ-CP vào SQLite
    */
   public async recordAuditLog(event: {
     action: string;
@@ -375,38 +554,28 @@ export class DatabaseService {
       details: event.details || {},
     };
 
-    // Lưu vào Postgres
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        await this.pgPool.query(
-          `INSERT INTO audit_logs (timestamp, action, ip, status, user_agent, details)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [entry.timestamp, entry.action, entry.ip, entry.status, entry.userAgent, JSON.stringify(entry.details)]
-        );
+        this.sqliteDb
+          .prepare(
+            `INSERT INTO audit_logs (timestamp, action, ip, status, user_agent, details)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            entry.timestamp,
+            entry.action,
+            entry.ip,
+            entry.status,
+            entry.userAgent,
+            JSON.stringify(entry.details)
+          );
         return;
       } catch (err) {
-        console.error('[DatabaseService] Lỗi ghi Audit Log Postgres:', err);
+        console.error('[DatabaseService] Lỗi ghi Audit Log vào SQLite:', err);
       }
     }
 
-    // Lưu qua Supabase REST
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        await fetch(`${this.supabaseUrl}/rest/v1/audit_logs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
-          body: JSON.stringify(entry),
-        });
-        return;
-      } catch (err) {}
-    }
-
-    // Fallback lưu local file jsonl
+    // Fallback ghi file jsonl
     if (!process.env.VERCEL) {
       try {
         this.ensureLocalDir();
@@ -418,37 +587,44 @@ export class DatabaseService {
   }
 
   /**
-   * Lấy danh sách Audit Logs gần nhất
+   * Lấy danh sách Audit Logs gần nhất từ SQLite
    */
   public async getRecentAuditLogs(limit: number = 100): Promise<AuditLogEntry[]> {
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(
-          `SELECT timestamp, action, ip, status, user_agent as "userAgent", details 
-           FROM audit_logs 
-           ORDER BY timestamp DESC 
-           LIMIT $1`,
-          [limit]
-        );
-        return res.rows as AuditLogEntry[];
-      } catch (err) {
-        console.error('[DatabaseService] Lỗi lấy Audit Logs Postgres:', err);
-      }
-    }
+        const rows = this.sqliteDb
+          .prepare(
+            `SELECT timestamp, action, ip, status, user_agent as userAgent, details
+             FROM audit_logs
+             ORDER BY id DESC
+             LIMIT ?`
+          )
+          .all(limit) as Array<{
+          timestamp: string;
+          action: string;
+          ip: string;
+          status: 'SUCCESS' | 'FAILURE' | 'BLOCKED';
+          userAgent: string;
+          details: string;
+        }>;
 
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/audit_logs?order=timestamp.desc&limit=${limit}`, {
-          headers: {
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
+        return rows.map((r) => {
+          let parsedDetails: Record<string, unknown> = {};
+          try {
+            parsedDetails = r.details ? JSON.parse(r.details) : {};
+          } catch {}
+          return {
+            timestamp: r.timestamp,
+            action: r.action,
+            ip: r.ip,
+            status: r.status,
+            userAgent: r.userAgent,
+            details: parsedDetails,
+          };
         });
-        if (res.ok) {
-          return (await res.json()) as AuditLogEntry[];
-        }
-      } catch (err) {}
+      } catch (err) {
+        console.error('[DatabaseService] Lỗi đọc Audit Logs từ SQLite:', err);
+      }
     }
 
     try {
@@ -471,91 +647,59 @@ export class DatabaseService {
   }
 
   /**
-   * Ping Cloud Database để chống ngủ đông (Anti-Pause) cho Supabase / Cloud Postgres Free Tier
+   * Kiểm tra trạng thái hoạt động của SQLite Database
    */
   public async pingDatabase(): Promise<{ success: boolean; message: string; timestamp: string }> {
     const now = new Date().toISOString();
-    let lastError = '';
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(`SELECT NOW() as current_time, count(*) as count FROM clinic_store`);
+        const row = this.sqliteDb.prepare(`SELECT COUNT(*) as count FROM clinic_store`).get() as { count: number };
         return {
           success: true,
-          message: `PostgreSQL Ping OK (${res.rows[0]?.current_time || now})`,
+          message: `Local SQLite (WAL) OK - ${row.count} store record(s)`,
           timestamp: now,
         };
-      } catch (err: any) {
-        console.warn('[DatabaseService] pgPool ping failed, attempting Supabase REST fallback:', err.message);
-        lastError = err.message;
+      } catch (err: unknown) {
+        return {
+          success: false,
+          message: `SQLite Ping error: ${(err as Error).message}`,
+          timestamp: now,
+        };
       }
     }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/clinic_store?select=id,updated_at&limit=1`, {
-          headers: {
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
-        });
-        if (res.ok) {
-          return { success: true, message: 'Supabase REST Ping OK', timestamp: now };
-        }
-        return { success: false, message: `Supabase REST HTTP ${res.status}`, timestamp: now };
-      } catch (err: any) {
-        return { success: false, message: `Supabase Ping error: ${err.message}`, timestamp: now };
-      }
-    }
-
     return {
-      success: !lastError,
-      message: lastError ? `PostgreSQL Ping error: ${lastError}` : 'Local storage active (no cloud DB configured)',
+      success: true,
+      message: 'Local JSON storage active',
       timestamp: now,
     };
   }
 
   /**
-   * Lấy thông tin tài khoản theo email
+   * Lấy thông tin tài khoản theo email từ SQLite
    */
   public async getAuthorizedUser(rawEmail: string): Promise<AuthorizedUser | null> {
     const email = rawEmail.toLowerCase().trim();
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(
-          `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at 
-           FROM authorized_users WHERE LOWER(email) = $1 LIMIT 1`,
-          [email]
-        );
-        if (res.rowCount && res.rows[0]) {
-          return res.rows[0] as AuthorizedUser;
-        }
+        const row = this.sqliteDb
+          .prepare(
+            `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at
+             FROM authorized_users
+             WHERE LOWER(email) = ?
+             LIMIT 1`
+          )
+          .get(email) as AuthorizedUser | undefined;
+        if (row) return row;
       } catch (err) {
-        console.error('[DatabaseService] Lỗi getAuthorizedUser Postgres:', err);
+        console.error('[DatabaseService] Lỗi getAuthorizedUser SQLite:', err);
       }
-    }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(email)}&select=*`, {
-          headers: {
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
-        });
-        if (res.ok) {
-          const rows = await res.json();
-          if (rows && rows.length > 0) return rows[0] as AuthorizedUser;
-        }
-      } catch (err) {}
     }
 
     return this.localUsers.get(email) || null;
   }
 
   /**
-   * Thêm hoặc cập nhật tài khoản
+   * Thêm hoặc cập nhật tài khoản trong SQLite
    */
   public async upsertAuthorizedUser(user: {
     email: string;
@@ -573,7 +717,7 @@ export class DatabaseService {
     const status: UserStatus = user.status || existing?.status || 'PENDING';
     const full_name = user.full_name || existing?.full_name || '';
     const avatar_url = user.avatar_url || existing?.avatar_url || '';
-    const approved_by = user.approved_by || existing?.approved_by;
+    const approved_by = user.approved_by || existing?.approved_by || '';
 
     const record: AuthorizedUser = {
       id,
@@ -587,39 +731,34 @@ export class DatabaseService {
       updated_at: now,
     };
 
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        await this.pgPool.query(
-          `INSERT INTO authorized_users (id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-           ON CONFLICT (email) DO UPDATE SET 
-             full_name = EXCLUDED.full_name,
-             avatar_url = EXCLUDED.avatar_url,
-             role = EXCLUDED.role,
-             status = EXCLUDED.status,
-             approved_by = EXCLUDED.approved_by,
-             updated_at = NOW()`,
-          [record.id, record.email, record.full_name, record.avatar_url, record.role, record.status, record.requested_at, record.approved_by]
-        );
+        this.sqliteDb
+          .prepare(
+            `INSERT INTO authorized_users (id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(email) DO UPDATE SET
+               full_name = excluded.full_name,
+               avatar_url = excluded.avatar_url,
+               role = excluded.role,
+               status = excluded.status,
+               approved_by = excluded.approved_by,
+               updated_at = excluded.updated_at`
+          )
+          .run(
+            record.id,
+            record.email,
+            record.full_name,
+            record.avatar_url,
+            record.role,
+            record.status,
+            record.requested_at,
+            record.approved_by,
+            record.updated_at
+          );
       } catch (err) {
-        console.error('[DatabaseService] Lỗi upsertAuthorizedUser Postgres:', err);
+        console.error('[DatabaseService] Lỗi upsertAuthorizedUser SQLite:', err);
       }
-    }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?on_conflict=email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-            Prefer: 'resolution=merge-duplicates',
-          },
-          body: JSON.stringify(record),
-        });
-      } catch (err) {}
     }
 
     this.localUsers.set(email, record);
@@ -627,37 +766,24 @@ export class DatabaseService {
   }
 
   /**
-   * Liệt kê tất cả tài khoản
+   * Liệt kê tất cả tài khoản từ SQLite
    */
   public async listAuthorizedUsers(): Promise<AuthorizedUser[]> {
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(
-          `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at 
-           FROM authorized_users 
-           ORDER BY 
-             CASE status WHEN 'PENDING' THEN 1 WHEN 'APPROVED' THEN 2 ELSE 3 END,
-             requested_at DESC`
-        );
-        return res.rows as AuthorizedUser[];
+        const rows = this.sqliteDb
+          .prepare(
+            `SELECT id, email, full_name, avatar_url, role, status, requested_at, approved_by, updated_at
+             FROM authorized_users
+             ORDER BY
+               CASE status WHEN 'PENDING' THEN 1 WHEN 'APPROVED' THEN 2 ELSE 3 END,
+               requested_at DESC`
+          )
+          .all() as AuthorizedUser[];
+        return rows;
       } catch (err) {
-        console.error('[DatabaseService] Lỗi listAuthorizedUsers Postgres:', err);
+        console.error('[DatabaseService] Lỗi listAuthorizedUsers SQLite:', err);
       }
-    }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/authorized_users?order=status.asc,requested_at.desc`, {
-          headers: {
-            apikey: this.supabaseKey,
-            Authorization: `Bearer ${this.supabaseKey}`,
-          },
-        });
-        if (res.ok) {
-          return (await res.json()) as AuthorizedUser[];
-        }
-      } catch (err) {}
     }
 
     return Array.from(this.localUsers.values());
@@ -679,7 +805,7 @@ export class DatabaseService {
   }
 
   /**
-   * Nhập trước (Pre-approve) email người thân
+   * Nhập trước (Pre-approve) email người thân vào Whitelist
    */
   public async preApproveUser(email: string, fullName: string, role: UserRole, approvedBy: string): Promise<AuthorizedUser> {
     return this.upsertAuthorizedUser({
@@ -696,12 +822,11 @@ export class DatabaseService {
    */
   public async deleteAuthorizedUser(rawEmail: string): Promise<boolean> {
     const email = rawEmail.toLowerCase().trim();
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        await this.pgPool.query(`DELETE FROM authorized_users WHERE LOWER(email) = $1`, [email]);
+        this.sqliteDb.prepare(`DELETE FROM authorized_users WHERE LOWER(email) = ?`).run(email);
       } catch (err) {
-        console.error('[DatabaseService] Lỗi deleteAuthorizedUser Postgres:', err);
+        console.error('[DatabaseService] Lỗi deleteAuthorizedUser SQLite:', err);
       }
     }
     this.localUsers.delete(email);
@@ -709,44 +834,20 @@ export class DatabaseService {
   }
 
   /**
-   * Lấy mã hash mật khẩu quản trị viên Master Admin từ Supabase / Postgres
+   * Lấy mã hash mật khẩu quản trị viên Master Admin từ SQLite
    */
   public async getAdminPasswordHash(): Promise<string | null> {
     const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        const res = await this.pgPool.query(
-          `SELECT password_hash FROM authorized_users WHERE LOWER(email) = $1 LIMIT 1`,
-          [adminEmail]
-        );
-        if (res.rows[0]?.password_hash) {
-          return res.rows[0].password_hash;
+        const row = this.sqliteDb
+          .prepare(`SELECT password_hash FROM authorized_users WHERE LOWER(email) = ? LIMIT 1`)
+          .get(adminEmail) as { password_hash?: string } | undefined;
+        if (row?.password_hash) {
+          return row.password_hash;
         }
       } catch (err) {
-        console.warn('[DatabaseService] Lỗi đọc password_hash PG:', err);
-      }
-    }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        const res = await fetch(
-          `${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(adminEmail)}&select=password_hash`,
-          {
-            headers: {
-              apikey: this.supabaseKey,
-              Authorization: `Bearer ${this.supabaseKey}`,
-            },
-          }
-        );
-        if (res.ok) {
-          const list = await res.json();
-          if (list[0]?.password_hash) {
-            return list[0].password_hash;
-          }
-        }
-      } catch (err) {
-        console.warn('[DatabaseService] Lỗi đọc password_hash Supabase:', err);
+        console.warn('[DatabaseService] Lỗi đọc password_hash SQLite:', err);
       }
     }
 
@@ -754,55 +855,71 @@ export class DatabaseService {
   }
 
   /**
-   * Cập nhật mật khẩu mới cho Master Admin lên Supabase / Postgres
+   * Cập nhật mật khẩu mới cho Master Admin vào SQLite
    */
   public async setAdminPasswordHash(hash: string): Promise<boolean> {
     const adminEmail = (process.env.ADMIN_EMAIL || 'tranminhhuy3031998@gmail.com').toLowerCase().trim();
     this.localAdminPasswordHash = hash;
 
-    if (this.pgPool) {
+    if (this.sqliteDb && this.isSqliteReady) {
       try {
-        await this.ensureCloudTables();
-        await this.pgPool.query(
-          `UPDATE authorized_users SET password_hash = $1, updated_at = NOW() WHERE LOWER(email) = $2`,
-          [hash, adminEmail]
-        );
+        this.sqliteDb
+          .prepare(`UPDATE authorized_users SET password_hash = ?, updated_at = ? WHERE LOWER(email) = ?`)
+          .run(hash, new Date().toISOString(), adminEmail);
       } catch (err) {
-        console.error('[DatabaseService] Lỗi lưu password_hash PG:', err);
-      }
-    }
-
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        await fetch(
-          `${this.supabaseUrl}/rest/v1/authorized_users?email=ilike.${encodeURIComponent(adminEmail)}`,
-          {
-            method: 'PATCH',
-            headers: {
-              apikey: this.supabaseKey,
-              Authorization: `Bearer ${this.supabaseKey}`,
-              'Content-Type': 'application/json',
-              Prefer: 'return=minimal',
-            },
-            body: JSON.stringify({ password_hash: hash, updated_at: new Date().toISOString() }),
-          }
-        );
-      } catch (err) {
-        console.error('[DatabaseService] Lỗi lưu password_hash Supabase:', err);
+        console.error('[DatabaseService] Lỗi lưu password_hash SQLite:', err);
       }
     }
 
     return true;
   }
 
+  public getSqliteDiagnostics(): SqliteDiagnostics {
+    if (this.cachedDiagnostics && Date.now() - this.cachedDiagnostics.timestamp < 10000) {
+      return this.cachedDiagnostics.data;
+    }
+
+    let sizeBytes = 0;
+    try {
+      if (fs.existsSync(this.sqliteDbFile)) {
+        sizeBytes = fs.statSync(this.sqliteDbFile).size;
+      }
+    } catch {}
+
+    let patientsCount = 0;
+    let prescriptionsCount = 0;
+    let drugsCount = 0;
+    let auditLogsCount = 0;
+
+    if (this.sqliteDb && this.isSqliteReady) {
+      try {
+        patientsCount = (this.sqliteDb.prepare(`SELECT COUNT(*) as c FROM patients`).get() as { c: number }).c;
+        prescriptionsCount = (this.sqliteDb.prepare(`SELECT COUNT(*) as c FROM prescriptions`).get() as { c: number }).c;
+        drugsCount = (this.sqliteDb.prepare(`SELECT COUNT(*) as c FROM pharmacy_catalog`).get() as { c: number }).c;
+        auditLogsCount = (this.sqliteDb.prepare(`SELECT COUNT(*) as c FROM audit_logs`).get() as { c: number }).c;
+      } catch {}
+    }
+
+    const result: SqliteDiagnostics = {
+      enabled: this.isSqliteReady,
+      dbPath: this.sqliteDbFile,
+      sizeBytes,
+      walMode: this.isSqliteReady,
+      patientsCount,
+      prescriptionsCount,
+      drugsCount,
+      auditLogsCount,
+    };
+
+    this.cachedDiagnostics = { data: result, timestamp: Date.now() };
+    return result;
+  }
+
   public getStorageStatus(): { mode: 'CLOUD' | 'LOCAL'; provider: string } {
-    if (this.isPgConnected) {
-      return { mode: 'CLOUD', provider: 'PostgreSQL / Neon Database' };
+    if (this.isSqliteReady) {
+      return { mode: 'LOCAL', provider: 'Local SQLite Engine (server_data/clinic.sqlite - WAL Mode)' };
     }
-    if (this.supabaseUrl && this.supabaseKey) {
-      return { mode: 'CLOUD', provider: 'Supabase REST API' };
-    }
-    return { mode: 'LOCAL', provider: 'Local File System (server_data/)' };
+    return { mode: 'LOCAL', provider: 'Local File System (server_data/clinic_db.json)' };
   }
 }
 

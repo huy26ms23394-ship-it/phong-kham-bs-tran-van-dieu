@@ -696,11 +696,13 @@ export const ConsultationForm: React.FC<ConsultationFormProps> = ({
     onSavePrescription(newPrescription, shouldPrint);
   };
 
-  const filteredPatients = patients.filter(
-    (p) =>
-      p.fullName.toLowerCase().includes(patientSearch.toLowerCase()) ||
-      p.phone.includes(patientSearch) ||
-      p.patientCode.toLowerCase().includes(patientSearch.toLowerCase())
+  const filteredPatients = useMemo(
+    () =>
+      patients.filter(
+        (p) =>
+          matchesVietnameseSearch(`${p.fullName} ${p.phone} ${p.patientCode}`, patientSearch)
+      ),
+    [patients, patientSearch]
   );
 
   const categories = useMemo<string[]>(

@@ -40,6 +40,7 @@ import { LoginModal } from './components/LoginModal';
 import { PendingApprovalScreen } from './components/PendingApprovalScreen';
 import { UserApprovalModal } from './components/UserApprovalModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { RemoteAccessModal, NetworkStatusData } from './components/RemoteAccessModal';
 import { ClinicUser } from './types/auth';
 import {
   getStoredToken,
@@ -265,8 +266,8 @@ export default function App() {
   );
   const [presetPrescription, setPresetPrescription] = useState<Prescription | null>(null);
 
-  // Live consultation draft state for ClinicalAiModal
-  const [liveDraft, setLiveDraft] = useState<{
+  // Live consultation draft ref (không dùng useState để tránh re-render toàn App mỗi lần bác sĩ gõ phím)
+  const liveDraftRef = useRef<{
     patient?: Patient;
     diagnosis: string;
     symptoms: string;
@@ -278,6 +279,19 @@ export default function App() {
     medications: [],
     vitals: { bloodPressure: '130/80', pulse: 75, weight: 65, height: 165 },
   });
+
+  const handleDraftChange = React.useCallback(
+    (draft: {
+      patient?: Patient;
+      diagnosis: string;
+      symptoms: string;
+      medications: PrescribedMedication[];
+      vitals: { bloodPressure: string; pulse: number; weight: number; height: number };
+    }) => {
+      liveDraftRef.current = draft;
+    },
+    []
+  );
 
   // Modals
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
@@ -297,6 +311,8 @@ export default function App() {
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isUserGuideModalOpen, setIsUserGuideModalOpen] = useState(false);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [isRemoteAccessModalOpen, setIsRemoteAccessModalOpen] = useState(false);
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatusData | null>(null);
   const [isReportsModalOpen, setIsReportsModalOpen] = useState(() => initialRouteRef.current.tab === 'reports');
   const [isAppointmentsModalOpen, setIsAppointmentsModalOpen] = useState(
     () => initialRouteRef.current.tab === 'appointments'
@@ -341,13 +357,33 @@ export default function App() {
     }
   };
 
+  const refreshNetworkStatus = React.useCallback(async () => {
+    if (authUser?.role === 'SUPER_ADMIN') {
+      try {
+        const res = await fetch('/api/system/network-status', {
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setNetworkStatus(data);
+          }
+        }
+      } catch {}
+    }
+  }, [authUser]);
+
   useEffect(() => {
     if (authUser?.role === 'SUPER_ADMIN') {
       refreshPendingUsers();
-      const interval = setInterval(refreshPendingUsers, 15000);
+      refreshNetworkStatus();
+      const interval = setInterval(() => {
+        refreshPendingUsers();
+        refreshNetworkStatus();
+      }, 15000);
       return () => clearInterval(interval);
     }
-  }, [authUser]);
+  }, [authUser, refreshNetworkStatus]);
 
   // Đếm số lịch hẹn tái khám trong tuần tới
   const appointmentCount = useMemo(() => {
@@ -405,12 +441,16 @@ export default function App() {
 
   const hasHydratedLanRef = useRef(false);
   const isPullingLanRef = useRef(false);
+  const lastSyncEtagRef = useRef<string>('');
   const lanSyncDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backupFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Pharmacy audit issues count for badge notification
+  // Pharmacy audit issues count for badge notification (chỉ quét thuốc cốt lõi/tùy chỉnh để đạt 0ms khởi động)
   const pharmacyIssueCount = useMemo(() => {
-    const report = auditPharmacyCatalog(pharmacyCatalog);
+    const coreAndCustom = pharmacyCatalog.filter(
+      (it) => !it.id.startsWith('vn3k-') || (it as any).isCustom
+    );
+    const report = auditPharmacyCatalog(coreAndCustom);
     return report.duplicateGroups.length + report.misclassifiedAlerts.length;
   }, [pharmacyCatalog]);
 
@@ -483,7 +523,11 @@ export default function App() {
         }),
       });
       if (res.ok) {
+        const resEtag = res.headers.get('ETag');
         const json = await res.json();
+        if (resEtag || json.etag) {
+          lastSyncEtagRef.current = resEtag || json.etag;
+        }
         setLastSyncedAt(json.updatedAt || new Date().toISOString());
       }
     } catch {
@@ -512,16 +556,23 @@ export default function App() {
     if (!authUser || authUser.status !== 'APPROVED') return;
     isPullingLanRef.current = true;
     try {
-      const res = await fetch('/api/clinic/sync', {
-        headers: getAuthHeaders(),
-      });
+      const headers: Record<string, string> = { ...getAuthHeaders() };
+      if (lastSyncEtagRef.current) {
+        headers['If-None-Match'] = lastSyncEtagRef.current;
+      }
+      const res = await fetch('/api/clinic/sync?light=1', { headers });
+      if (res.status === 304) return;
       if (res.status === 401 || res.status === 403) {
         clearSession();
         setAuthUser(null);
         return;
       }
       if (!res.ok) return;
+      const resEtag = res.headers.get('ETag');
       const json = await res.json();
+      if (resEtag || json.etag) {
+        lastSyncEtagRef.current = resEtag || json.etag;
+      }
       if (json.hasServerData && json.data) {
         if (json.data.clinicInfo) {
           setClinicInfo((prev) => ({
@@ -560,23 +611,29 @@ export default function App() {
     }
   }, [authUser]);
 
-  // Đồng bộ 2 chiều qua Cloud Supabase / PostgreSQL
-  // Polling nhẹ mỗi 8s kiểm tra xem có thay đổi từ thiết bị khác không
+  // Đồng bộ 2 chiều qua SQLite Local Server với ETag 304 + Lightweight Mode (0ms khi không đổi)
   useEffect(() => {
     if (!authUser || authUser.status !== 'APPROVED') return;
     const syncInterval = setInterval(async () => {
       if (isPullingLanRef.current || document.hidden) return;
       try {
-        const res = await fetch('/api/clinic/sync', {
-          headers: getAuthHeaders(),
-        });
+        const headers: Record<string, string> = { ...getAuthHeaders() };
+        if (lastSyncEtagRef.current) {
+          headers['If-None-Match'] = lastSyncEtagRef.current;
+        }
+        const res = await fetch('/api/clinic/sync?light=1&poll=1', { headers });
+        if (res.status === 304) return;
         if (res.status === 401 || res.status === 403) {
           clearSession();
           setAuthUser(null);
           return;
         }
         if (!res.ok) return;
+        const resEtag = res.headers.get('ETag');
         const json = await res.json();
+        if (resEtag || json.etag) {
+          lastSyncEtagRef.current = resEtag || json.etag;
+        }
         if (json.hasServerData && json.data && json.data.updatedAt) {
           if (lastSyncedAt && json.data.updatedAt > lastSyncedAt) {
             if (json.data.clinicInfo) {
@@ -603,10 +660,10 @@ export default function App() {
       } catch {
         // Hoạt động offline an toàn
       }
-    }, 8000);
+    }, 12000);
 
     return () => clearInterval(syncInterval);
-  }, [lastSyncedAt]);
+  }, [authUser, lastSyncedAt]);
 
   // Tự Động Khóa Màn Hình Khi Không Thao Tác (Auto-Inactivity PIN Lock sau 15 phút)
   useEffect(() => {
@@ -670,7 +727,11 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('mediba_pharmacy_catalog_v2', JSON.stringify(pharmacyCatalog));
+      // Chỉ lưu thuốc cốt lõi/tùy chỉnh vào localStorage để tránh lag JSON.stringify 1.5MB mỗi lần render
+      const compactCatalog = pharmacyCatalog.filter(
+        (it) => !it.id.startsWith('vn3k-') || (it as any).isCustom
+      );
+      localStorage.setItem('mediba_pharmacy_catalog_v2', JSON.stringify(compactCatalog));
     } catch {}
     scheduleLanSync({ pharmacyCatalog });
   }, [pharmacyCatalog]);
@@ -821,7 +882,7 @@ export default function App() {
   };
 
   const activePatientForExam =
-    liveDraft.patient ||
+    liveDraftRef.current.patient ||
     patients.find((p) => p.id === selectedPatientForExamId) ||
     patients[0];
 
@@ -922,6 +983,8 @@ export default function App() {
           onOpenGmailInbox={() => setIsGmailModalOpen(true)}
           onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
           onOpenUserGuide={() => setIsUserGuideModalOpen(true)}
+          onOpenLanConnect={() => setIsRemoteAccessModalOpen(true)}
+          isTunnelActive={networkStatus?.tunnel?.status === 'ACTIVE'}
           totalPatientsCount={patients.length}
           totalPrescriptionsCount={prescriptions.length}
           googleUser={{
@@ -966,7 +1029,7 @@ export default function App() {
                 setPatientToEdit(patient);
                 setIsPatientModalOpen(true);
               }}
-              onDraftChange={setLiveDraft}
+              onDraftChange={handleDraftChange}
               layoutMode={layoutMode}
             />
           )}
@@ -1089,16 +1152,20 @@ export default function App() {
               <span>Zero-Trust (NĐ 333)</span>
             </span>
 
-            <span
-              className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400"
-              title="Đồng bộ tự động thời gian thực qua Cloud Supabase"
+            <button
+              type="button"
+              onClick={() => setIsRemoteAccessModalOpen(true)}
+              className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer transition-colors"
+              title="Bấm để mở Bảng điều khiển Kết nối Từ xa (Cloudflare Tunnel) & Mạng LAN Nội bộ"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span className="hidden lg:inline">Cloud Supabase</span>
-            </span>
+              <span className="hidden lg:inline">
+                {networkStatus?.tunnel?.status === 'ACTIVE' ? 'Tunnel Internet Active' : 'Local SQLite (WAL)'}
+              </span>
+            </button>
 
             <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono font-bold text-[10px] border border-slate-200 dark:border-slate-700">
               v2.5 Pro
@@ -1190,13 +1257,13 @@ export default function App() {
         allPrescriptions={prescriptions}
         catalog={pharmacyCatalog}
         diagnosis={
-          liveDraft.diagnosis ||
+          liveDraftRef.current.diagnosis ||
           activePatientForExam?.chronicConditions?.[0] ||
           'Tăng huyết áp nguyên phát'
         }
-        symptoms={liveDraft.symptoms || 'Khám bệnh định kỳ và theo dõi điều trị'}
-        medications={liveDraft.medications}
-        vitals={liveDraft.vitals}
+        symptoms={liveDraftRef.current.symptoms || 'Khám bệnh định kỳ và theo dõi điều trị'}
+        medications={liveDraftRef.current.medications}
+        vitals={liveDraftRef.current.vitals}
       />
 
       <GmailInboxModal
@@ -1267,6 +1334,14 @@ export default function App() {
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
+      />
+
+      {/* Kết Nối Từ Xa (Cloudflare Tunnel) & Mạng LAN Nội Bộ */}
+      <RemoteAccessModal
+        isOpen={isRemoteAccessModalOpen}
+        onClose={() => setIsRemoteAccessModalOpen(false)}
+        networkStatus={networkStatus}
+        onRefreshStatus={refreshNetworkStatus}
       />
 
       {/* Kế hoạch 2: Màn Hình Khóa PIN Bảo Mật Cục Bộ (iOS/LAN) */}

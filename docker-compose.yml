@@ -1,0 +1,19 @@
+services:
+  phong-kham:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: phong-kham-bs-dieu:latest
+    container_name: phong-kham-bs-dieu
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./server_data:/app/server_data
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST_LAN_IP=${HOST_LAN_IP:-}
